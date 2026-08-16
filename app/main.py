@@ -1,18 +1,16 @@
-from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.routing import APIRouter
+from fastapi import APIRouter, FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from decimal import Decimal
 
-from app.database import get_db  # С‚РІРѕСЏ Р·Р°РІРёСЃРёРјРѕСЃС‚СЊ РґР»СЏ СЃРµСЃСЃРёРё (Session)
+from app.database import get_db  # твоя зависимость для сессии (Session)
 from app.schemas import WalletCreate
 from app.services import execute_wallet, execute_balance, execute_deposit, execute_payment, execute_cancel
-
 
 app = FastAPI(title='Wallet Service')
 api_v1 = APIRouter(prefix='/api/v1')
 
 @api_v1.post('/wallets')
-def create_wallet(wallet_data: WalletCreate, db: Session = Depends(get_db)) -> dict[str, str | Decimal]:
+async def create_wallet(wallet_data: WalletCreate, db: Session = Depends(get_db)) -> dict[str, str | Decimal]:
     try:
         return execute_wallet(db, wallet_data.balance)
     except ValueError as err_code:
@@ -22,28 +20,28 @@ def create_wallet(wallet_data: WalletCreate, db: Session = Depends(get_db)) -> d
         )
 
 @api_v1.get('/wallets/{wallet_uuid}/balance')
-def get_balance(wallet_uuid: str, db: Session = Depends(get_db)) -> dict[str, str | Decimal]:
+async def get_balance(wallet_uuid: str, db: Session = Depends(get_db)) -> dict[str, str | Decimal]:
     try:
         result = execute_balance(db, wallet_uuid)
         return result
     except ValueError as err_code:
-        # РљРѕС€РµР»С‘Рє РЅРµ РЅР°Р№РґРµРЅ
+        # Кошелёк не найден
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(err_code),
         )
 
 @api_v1.post('/wallets/{wallet_uuid}/payment')
-def create_payment(wallet_uuid: str, amount: Decimal, db: Session = Depends(get_db)) -> dict[str, int | str | Decimal]:
+async def create_payment(wallet_uuid: str, amount: Decimal, db: Session = Depends(get_db)) -> dict[str, int | str | Decimal]:
     """
-    РЎРїРёСЃР°РЅРёРµ СЃСЂРµРґСЃС‚РІ: amount РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РѕС‚СЂРёС†Р°С‚РµР»СЊРЅС‹Рј.
-    РџСЂРёРјРµСЂ body: {'amount': -100.00}
+    Списание средств: amount должен быть отрицательным.
+    Пример body: {'amount': -100.00}
     """
     try:
         result = execute_payment(db, wallet_uuid, amount)
         return result
     except ValueError as err_code:
-        # Р‘РёР·РЅРµСЃ-РѕС€РёР±РєРё (РЅРµРІРµСЂРЅС‹Р№ Р·РЅР°Рє, РЅРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ СЃСЂРµРґСЃС‚РІ Рё С‚.Рї.)
+        # Бизнес-ошибки (неверный знак, недостаточно средств и т.п.)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(err_code),
@@ -51,10 +49,10 @@ def create_payment(wallet_uuid: str, amount: Decimal, db: Session = Depends(get_
 
 
 @api_v1.post('/wallets/{wallet_uuid}/deposit')
-def create_deposit(wallet_uuid: str, amount: Decimal, db: Session = Depends(get_db)) -> dict[str, int | str | Decimal]:
+async def create_deposit(wallet_uuid: str, amount: Decimal, db: Session = Depends(get_db)) -> dict[str, int | str | Decimal]:
     """
-    Р—Р°С‡РёСЃР»РµРЅРёРµ СЃСЂРµРґСЃС‚РІ: amount РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ РїРѕР»РѕР¶РёС‚РµР»СЊРЅС‹Рј.
-    РџСЂРёРјРµСЂ body: {'amount': 500.00}
+    Зачисление средств: amount должен быть положительным.
+    Пример body: {'amount': 500.00}
     """
     try:
         result = execute_deposit(db, wallet_uuid, amount)
@@ -67,24 +65,24 @@ def create_deposit(wallet_uuid: str, amount: Decimal, db: Session = Depends(get_
 
 
 @api_v1.post('/transactions/{transaction_id}/cancel')
-def cancel_transaction(transaction_id: int, db: Session = Depends(get_db)) -> dict[str, str | int | Decimal]:
+async def cancel_transaction(transaction_id: int, db: Session = Depends(get_db)) -> dict[str, str | int | Decimal]:
     """
-    РћС‚РјРµРЅР° РѕРґРЅРѕР№ С‚СЂР°РЅР·Р°РєС†РёРё РїРѕ ID.
-    РђС‚РѕРјР°СЂРЅРѕ: Р»РёР±Рѕ РІСЃС‘, Р»РёР±Рѕ РЅРёС‡РµРіРѕ.
+    Отмена одной транзакции по ID.
+    Атомарно: либо всё, либо ничего.
     """
     try:
         result = execute_cancel(db, transaction_id)
         return result
     except ValueError as err_code:
-        # РўСЂР°РЅР·Р°РєС†РёСЏ РЅРµ РЅР°Р№РґРµРЅР° Рё С‚.Рї.
+        # Транзакция не найдена и т.п.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(err_code),
         )
     except Exception:
-        # РќРµРѕР¶РёРґР°РЅРЅС‹Рµ РѕС€РёР±РєРё (РЅР°РїСЂРёРјРµСЂ, РїСЂРѕР±Р»РµРјС‹ СЃ Р±Р»РѕРєРёСЂРѕРІРєР°РјРё)
+        # Неожиданные ошибки (например, проблемы с блокировками)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Р’РЅСѓС‚СЂРµРЅРЅСЏСЏ РѕС€РёР±РєР° СЃРµСЂРІРёСЃР°",
+            detail="Внутренняя ошибка сервиса",
         )
 app.include_router(api_v1)
