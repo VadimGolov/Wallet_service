@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
-from app.repository import create_wallet, get_balance, change_balance, cancel_transaction
+from app.repository import create_wallet, get_balance, change_balance, cancel_transaction, clear_data
 
 def execute_wallet(db: Session, initial_balance: Decimal=Decimal('0')) -> dict[str, str | Decimal]:
     if initial_balance < 0:
@@ -99,3 +99,13 @@ def execute_cancel(db: Session, transaction_id: int) -> dict[str, str | int | De
         'balance_after': wallet.balance,
         'reversed_amount': transact.amount
     }
+
+def execute_clean(db: Session) -> dict[str, str]:
+    """
+    Удаляет все данные из wallets и transactions.
+    Гарантирует атомарность: либо всё удалится, либо ничего.
+    """
+    clear_data(db)
+    db.commit()
+
+    return {'status': 'All test data cleared successfully'}

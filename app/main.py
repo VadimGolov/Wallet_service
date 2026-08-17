@@ -85,4 +85,19 @@ def cancel_transaction(transaction_id: int, db: Session = Depends(get_db)) -> di
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Внутренняя ошибка сервиса",
         )
+
+@api_v1.post('/reset_db')
+# def reset_database(db: Session = Depends(get_db), include_in_schema=False) -> dict[str, str]:
+def reset_database(db: Session = Depends(get_db)) -> dict[str, str]:
+    try:
+        result = reset_database(db)
+        return result
+    except Exception:
+        # Неожиданные ошибки
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Внутренняя ошибка сервиса",
+        )
+
 app.include_router(api_v1)

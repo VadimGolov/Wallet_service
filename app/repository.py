@@ -1,7 +1,7 @@
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 from app.models import Wallet, Transaction
 
@@ -106,3 +106,16 @@ def cancel_transaction(db: Session, transaction_id: int) -> tuple[Wallet, Transa
     db.delete(transact)
 
     return wallet, transact
+
+# -----------------------------------------------------------------------------
+# Для целей тестирования удаление всех записей их обеих БД
+# -----------------------------------------------------------------------------
+
+def clear_data(session: Session) -> None:
+    """
+    Удаляет ВСЕ записи из таблиц wallets и transactions.
+    """
+    # Сначала транзакции, потому что в них есть ForeignKey
+    session.execute(delete(Transaction))
+    # Потом кошельки
+    session.execute(delete(Wallet))
