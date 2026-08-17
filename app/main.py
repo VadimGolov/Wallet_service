@@ -90,8 +90,7 @@ def cancel_transaction(transaction_id: int, db: Session = Depends(get_db)) -> di
 # def reset_database(db: Session = Depends(get_db), include_in_schema=False) -> dict[str, str]:
 def reset_database(db: Session = Depends(get_db)) -> dict[str, str]:
     try:
-        result = reset_database(db)
-        return result
+        return reset_database(db)
     except Exception:
         # Неожиданные ошибки
         db.rollback()
