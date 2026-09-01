@@ -108,4 +108,4 @@ def execute_clean(db: Session) -> dict[str, str]:
     clear_data(db)
     db.commit()
 
-    return {'status': 'All test data cleared successfully'}
+    return {'status': 'All data deleted successfully'}

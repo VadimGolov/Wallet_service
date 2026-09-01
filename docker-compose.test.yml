@@ -1,0 +1,11 @@
+services:
+  web:
+    # Переопределяем команду: для тестов не нужен uvicorn, нужен pytest
+    command: pytest
+    env_file:
+      - .testenv
+    volumes:
+      - .:/app
+
+  db:
+    restart: unless-stopped
