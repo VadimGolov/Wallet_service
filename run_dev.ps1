@@ -1,16 +1,16 @@
-# Поиск файла .env
+# ГЏГ®ГЁГ±ГЄ ГґГ Г©Г«Г  .env
 param([string]$EnvFile = ".env")
 
 if (-not (Test-Path -Path $EnvFile -PathType Leaf)) {
-    Write-Error "`nФайл переменных окружения ${EnvFile} не найден"
+    Write-Error "`nГ”Г Г©Г« ГЇГҐГ°ГҐГ¬ГҐГ­Г­Г»Гµ Г®ГЄГ°ГіГ¦ГҐГ­ГЁГї ${EnvFile} Г­ГҐ Г­Г Г©Г¤ГҐГ­"
     exit 1
 }
 
 Write-Host "`n--------------------------------------------------" -ForegroundColor Cyan
-Write-Host "Запуск Режима Разработки (volume + reload)..." -ForegroundColor Cyan
+Write-Host "Г‡Г ГЇГіГ±ГЄ ГђГҐГ¦ГЁГ¬Г  ГђГ Г§Г°Г ГЎГ®ГІГЄГЁ (volume + reload)..." -ForegroundColor Cyan
 Write-Host "--------------------------------------------------" -ForegroundColor Cyan
 
-# Читаем .env в словарь
+# Г—ГЁГІГ ГҐГ¬ .env Гў Г±Г«Г®ГўГ Г°Гј
 $EnvVars = @{}
 Get-Content $EnvFile | ForEach-Object {
     $line = $_.Trim()
@@ -22,78 +22,72 @@ Get-Content $EnvFile | ForEach-Object {
     }
 }
 
-# Распаковка словаря в переменные
+# ГђГ Г±ГЇГ ГЄГ®ГўГЄГ  Г±Г«Г®ГўГ Г°Гї Гў ГЇГҐГ°ГҐГ¬ГҐГ­Г­Г»ГҐ
 $user = $EnvVars['POSTGRES_USER']
 $dbName = $EnvVars['POSTGRES_DB']
 
-# Шаг 1: Спрашиваем про миграции
-Write-Host "`n[1] Вы хотите удалить все существующие миграции и создать новые? (Y/N): " -NoNewline -ForegroundColor Yellow
+# ГГ ГЈ 1: Г‘ГЇГ°Г ГёГЁГўГ ГҐГ¬ ГЇГ°Г® Г¬ГЁГЈГ°Г Г¶ГЁГЁ
+Write-Host "`n[1] Г‚Г» ГµГ®ГІГЁГІГҐ ГіГ¤Г Г«ГЁГІГј ГўГ±ГҐ Г±ГіГ№ГҐГ±ГІГўГіГѕГ№ГЁГҐ Г¬ГЁГЈГ°Г Г¶ГЁГЁ ГЁ Г±Г®Г§Г¤Г ГІГј Г­Г®ГўГ»ГҐ? (Y/N): " -NoNewline -ForegroundColor Yellow
 $delete = Read-Host
 
 if ($delete -eq 'Y' -or $delete -eq 'y') {
-    # Шаг 2: Очистка БД (пока контейнеры работают, если они запущены)
-    Write-Host "`n[2] Очистка базы данных" -ForegroundColor Green
-    # Проверяем, запущен ли контейнер c базой данных
+    # ГГ ГЈ 2: ГЋГ·ГЁГ±ГІГЄГ  ГЃГ„ (ГЇГ®ГЄГ  ГЄГ®Г­ГІГҐГ©Г­ГҐГ°Г» Г°Г ГЎГ®ГІГ ГѕГІ, ГҐГ±Г«ГЁ Г®Г­ГЁ Г§Г ГЇГіГ№ГҐГ­Г»)
+    Write-Host "`n[2] ГЋГ·ГЁГ±ГІГЄГ  ГЎГ Г§Г» Г¤Г Г­Г­Г»Гµ" -ForegroundColor Green
+    # ГЏГ°Г®ГўГҐГ°ГїГҐГ¬, Г§Г ГЇГіГ№ГҐГ­ Г«ГЁ ГЄГ®Г­ГІГҐГ©Г­ГҐГ° c ГЎГ Г§Г®Г© Г¤Г Г­Г­Г»Гµ
     $is_active = docker compose ps --filter "status=running" --services | Select-String "db"
     if ($is_active) {
         docker compose exec -T db psql -U ${user} -d ${dbName} -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" 2>$null
     } else {
-        Write-Host "`nКонтейнер с базой данных не запущен, очистка невозможна" -ForegroundColor Red
+        Write-Host "`nГЉГ®Г­ГІГҐГ©Г­ГҐГ° Г± ГЎГ Г§Г®Г© Г¤Г Г­Г­Г»Гµ Г­ГҐ Г§Г ГЇГіГ№ГҐГ­, Г®Г·ГЁГ±ГІГЄГ  Г­ГҐГўГ®Г§Г¬Г®Г¦Г­Г " -ForegroundColor Red
         exit 1
     }
 }
-# Удаление старых контейнеров
+# Г“Г¤Г Г«ГҐГ­ГЁГҐ Г±ГІГ Г°Г»Гµ ГЄГ®Г­ГІГҐГ©Г­ГҐГ°Г®Гў
 
-Write-Host "[3] Удаление старых контейнеров" -ForegroundColor Green
+Write-Host "[3] Г“Г¤Г Г«ГҐГ­ГЁГҐ Г±ГІГ Г°Г»Гµ ГЄГ®Г­ГІГҐГ©Г­ГҐГ°Г®Гў" -ForegroundColor Green
 docker compose down
 
 if ($delete -eq 'Y' -or $delete -eq 'y') {
-    # Удаление файлов миграций
-    Write-Host "`n[4] Удаление всех файлов миграций" -ForegroundColor Green
+    # Г“Г¤Г Г«ГҐГ­ГЁГҐ ГґГ Г©Г«Г®Гў Г¬ГЁГЈГ°Г Г¶ГЁГ©
+    Write-Host "`n[4] Г“Г¤Г Г«ГҐГ­ГЁГҐ ГўГ±ГҐГµ ГґГ Г©Г«Г®Гў Г¬ГЁГЈГ°Г Г¶ГЁГ©" -ForegroundColor Green
     Remove-Item -Path "alembic/versions/*.py" -Force
 } else {
-    Write-Host "`n[5] Файлы миграций сохранены" -ForegroundColor Cyan
+    Write-Host "`n[5] Г”Г Г©Г«Г» Г¬ГЁГЈГ°Г Г¶ГЁГ© Г±Г®ГµГ°Г Г­ГҐГ­Г»" -ForegroundColor Cyan
 }
 
-# Создание новых контейнеров
-Write-Host "`n[6] Создание новых контейнеров" -ForegroundColor Green
+# Г‘Г®Г§Г¤Г Г­ГЁГҐ Г­Г®ГўГ»Гµ ГЄГ®Г­ГІГҐГ©Г­ГҐГ°Г®Гў
+Write-Host "`n[6] Г‘Г®Г§Г¤Г Г­ГЁГҐ Г­Г®ГўГ»Гµ ГЄГ®Г­ГІГҐГ©Г­ГҐГ°Г®Гў" -ForegroundColor Green
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
-# Пауза, чтобы контейнеры запустились
+# ГЏГ ГіГ§Г , Г·ГІГ®ГЎГ» ГЄГ®Г­ГІГҐГ©Г­ГҐГ°Г» Г§Г ГЇГіГ±ГІГЁГ«ГЁГ±Гј
 Start-Sleep -Seconds 3
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "`nНе удалось инициализировать базу данных, для исправления перезапустите скрипт`n" -ForegroundColor Red
+    Write-Host "`nГЌГҐ ГіГ¤Г Г«Г®Г±Гј ГЁГ­ГЁГ¶ГЁГ Г«ГЁГ§ГЁГ°Г®ГўГ ГІГј ГЎГ Г§Гі Г¤Г Г­Г­Г»Гµ, Г¤Г«Гї ГЁГ±ГЇГ°Г ГўГ«ГҐГ­ГЁГї ГЇГҐГ°ГҐГ§Г ГЇГіГ±ГІГЁГІГҐ Г±ГЄГ°ГЁГЇГІ`n" -ForegroundColor Red
     exit 1
 }
 
-# Полная очистика БД
-#if ($delete -eq 'Y' -or $delete -eq 'y') {
-#    Write-Host "[5] Очистка базы данных" -ForegroundColor Green
-#    docker compose exec db psql -U ${user} -d ${dbName} -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-#}
-
-# Создание новой миграции если старые удалены
+# Г‘Г®Г§Г¤Г Г­ГЁГҐ Г­Г®ГўГ®Г© Г¬ГЁГЈГ°Г Г¶ГЁГЁ ГҐГ±Г«ГЁ Г±ГІГ Г°Г»ГҐ ГіГ¤Г Г«ГҐГ­Г»
 if ($delete -eq 'Y' -or $delete -eq 'y') {
-    Write-Host "`n[7]Создание первой миграции" -ForegroundColor Yellow
+    Write-Host "`n[7]Г‘Г®Г§Г¤Г Г­ГЁГҐ ГЇГҐГ°ГўГ®Г© Г¬ГЁГЈГ°Г Г¶ГЁГЁ" -ForegroundColor Yellow
     docker compose exec web alembic revision --autogenerate -m "initial"
 } else {
     $initial = Get-ChildItem -Path "alembic/versions" -Filter "*initial.py" -ErrorAction SilentlyContinue
     if ($initial.Count -gt 0) {
-        Write-Host "[8] Найден файл первой миграции" -ForegroundColor Green
+        Write-Host "[8] ГЌГ Г©Г¤ГҐГ­ ГґГ Г©Г« ГЇГҐГ°ГўГ®Г© Г¬ГЁГЈГ°Г Г¶ГЁГЁ" -ForegroundColor Green
     } else {
-        Write-Host "[8] Миграций не найдено!" -ForegroundColor Red
+        Write-Host "[8] ГЊГЁГЈГ°Г Г¶ГЁГ© Г­ГҐ Г­Г Г©Г¤ГҐГ­Г®!" -ForegroundColor Red
         exit 1
     }
 }
 
-# Применить миграции
+# ГЏГ°ГЁГ¬ГҐГ­ГЁГІГј Г¬ГЁГЈГ°Г Г¶ГЁГЁ
 docker compose exec web alembic upgrade head
-Write-Host "`n[9] Миграции применены" -ForegroundColor Green
+Write-Host "`n[9] ГЊГЁГЈГ°Г Г¶ГЁГЁ ГЇГ°ГЁГ¬ГҐГ­ГҐГ­Г»" -ForegroundColor Green
 
-# Финальный вывод
+# Г”ГЁГ­Г Г«ГјГ­Г»Г© ГўГ»ГўГ®Г¤
 Write-Host "`n--------------------------------------------------" -ForegroundColor Cyan
-Write-Host "Swagger доступен по адресу: http://localhost:8000" -ForegroundColor Cyan
-Write-Host "Логи: docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f" -ForegroundColor Cyan
-Write-Host "Остановка: docker compose down" -ForegroundColor Cyan
+Write-Host "Swagger Г¤Г®Г±ГІГіГЇГҐГ­ ГЇГ® Г Г¤Г°ГҐГ±Гі: http://localhost:8000" -ForegroundColor Cyan
+Write-Host "Г‹Г®ГЈГЁ: docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f" -ForegroundColor Cyan
+Write-Host "ГЋГ±ГІГ Г­Г®ГўГЄГ : docker compose down" -ForegroundColor Cyan
 Write-Host "--------------------------------------------------" -ForegroundColor Cyan
