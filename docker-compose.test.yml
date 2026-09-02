@@ -1,11 +1,32 @@
 services:
-  web:
-    # Переопределяем команду: для тестов не нужен uvicorn, нужен pytest
-    command: pytest
+  db_test:
+    image: postgres:15
     env_file:
       - .testenv
     volumes:
-      - .:/app
+      - pgdata_test:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_wallets"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  db:
-    restart: unless-stopped
+  tests:
+    build: .
+    env_file:
+      - .testenv
+    volumes:
+      - ./alembic:/app/alembic   # чтобы миграции были доступны
+      - ./tests:/app/tests       # монтируем тесты для разработки
+    command: >
+      sh -c "
+        alembic upgrade head &&
+        pytest -v --tb=short tests/
+      "
+    depends_on:
+      db_test:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  pgdata_test:

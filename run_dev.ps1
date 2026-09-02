@@ -32,19 +32,21 @@ $delete = Read-Host
 
 if ($delete -eq 'Y' -or $delete -eq 'y') {
     # Шаг 2: Очистка БД (пока контейнеры работают, если они запущены)
-    Write-Host "`n[2] Очистка базы данных" -ForegroundColor Green
+    Write-Host "`n[2] Очистка базы данных " -NoNewline -ForegroundColor Green
     # Проверяем, запущен ли контейнер c базой данных
-    $is_active = docker compose ps --filter "status=running" --services | Select-String "db"
-    if ($is_active) {
-        docker compose exec -T db psql -U ${user} -d ${dbName} -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" 2>$null
+    $db_active = docker compose ps --filter "status=running" --services | Select-String "db"
+    if ($db_active) {
+        docker compose exec -T db psql -U ${user} -d ${dbName} -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" 2>&1 | Out-Null
+        Write-Host "успещно завершена" -ForegroundColor Green
     } else {
         Write-Host "`nКонтейнер с базой данных не запущен, очистка невозможна" -ForegroundColor Red
-        exit 1
+        Write-Host "Миграции не будут удалены" -ForegroundColor Red
+        $delete = 'N'
     }
 }
 # Удаление старых контейнеров
 
-Write-Host "[3] Удаление старых контейнеров" -ForegroundColor Green
+Write-Host "`n[3] Удаление старых контейнеров" -ForegroundColor Green
 docker compose down
 
 if ($delete -eq 'Y' -or $delete -eq 'y') {
