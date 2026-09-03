@@ -32,33 +32,35 @@ $delete = Read-Host
 
 if ($delete -eq 'Y' -or $delete -eq 'y') {
     # Шаг 2: Очистка БД (пока контейнеры работают, если они запущены)
-    Write-Host "`n[2] Очистка базы данных " -NoNewline -ForegroundColor Green
+    Write-Host "`n[2] Очистка базы данных... " -NoNewline -ForegroundColor Green
     # Проверяем, запущен ли контейнер c базой данных
     $db_active = docker compose ps --filter "status=running" --services | Select-String "db"
     if ($db_active) {
         docker compose exec -T db psql -U ${user} -d ${dbName} -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" 2>&1 | Out-Null
-        Write-Host "успещно завершена" -ForegroundColor Green
+        Write-Host "успешно завершена" -ForegroundColor Green
     } else {
-        Write-Host "`nКонтейнер с базой данных не запущен, очистка невозможна" -ForegroundColor Red
-        Write-Host "Миграции не будут удалены" -ForegroundColor Red
+        Write-Host
+        Write-Host "    Контейнер с базой данных не запущен, очистка невозможна" -ForegroundColor Red
+        Write-Host "    Все миграции будут сохранены" -ForegroundColor Red
         $delete = 'N'
     }
 }
-# Удаление старых контейнеров
 
+# Удаление старых контейнеров
 Write-Host "`n[3] Удаление старых контейнеров" -ForegroundColor Green
 docker compose down
 
 if ($delete -eq 'Y' -or $delete -eq 'y') {
     # Удаление файлов миграций
-    Write-Host "`n[4] Удаление всех файлов миграций" -ForegroundColor Green
+    Write-Host "`n[4] Удаление всех файлов миграций... " -NoNewline -ForegroundColor Green
     Remove-Item -Path "alembic/versions/*.py" -Force
+    Write-Host "успешно удалены" -ForegroundColor Green
 } else {
-    Write-Host "`n[5] Файлы миграций сохранены" -ForegroundColor Cyan
+    Write-Host "`n[4] Файлы миграций сохранены" -ForegroundColor Cyan
 }
 
 # Создание новых контейнеров
-Write-Host "`n[6] Создание новых контейнеров" -ForegroundColor Green
+Write-Host "`n[5] Создание новых контейнеров" -ForegroundColor Green
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 
 # Пауза, чтобы контейнеры запустились
@@ -71,21 +73,21 @@ if ($LASTEXITCODE -ne 0) {
 
 # Создание новой миграции если старые удалены
 if ($delete -eq 'Y' -or $delete -eq 'y') {
-    Write-Host "`n[7]Создание первой миграции" -ForegroundColor Yellow
+    Write-Host "`n[6]Создание первой миграции" -ForegroundColor Yellow
     docker compose exec web alembic revision --autogenerate -m "initial"
 } else {
     $initial = Get-ChildItem -Path "alembic/versions" -Filter "*initial.py" -ErrorAction SilentlyContinue
     if ($initial.Count -gt 0) {
-        Write-Host "[8] Найден файл первой миграции" -ForegroundColor Green
+        Write-Host "`n[7] Найден файл первой миграции" -ForegroundColor Green
     } else {
-        Write-Host "[8] Миграций не найдено!" -ForegroundColor Red
+        Write-Host "`n[7] Миграций не найдено!" -ForegroundColor Red
         exit 1
     }
 }
 
 # Применить миграции
 docker compose exec web alembic upgrade head
-Write-Host "`n[9] Миграции применены" -ForegroundColor Green
+Write-Host "`n[8] Миграции применены" -ForegroundColor Green
 
 # Финальный вывод
 Write-Host "`n--------------------------------------------------" -ForegroundColor Cyan

@@ -16,8 +16,8 @@ services:
     env_file:
       - .testenv
     volumes:
-      - ./alembic:/app/alembic   # чтобы миграции были доступны
-      - ./tests:/app/tests       # монтируем тесты для разработки
+      - ./alembic:/app/alembic
+      - ./tests:/app/tests
     command: >
       sh -c "
         alembic upgrade head &&
@@ -26,7 +26,7 @@ services:
     depends_on:
       db_test:
         condition: service_healthy
-    restart: "no"
+    restart: 'no'
 
 volumes:
   pgdata_test:

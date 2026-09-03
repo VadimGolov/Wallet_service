@@ -1,22 +1,36 @@
 import os
+from pathlib import Path
 from dotenv import find_dotenv, load_dotenv
-from dataclasses import dataclass, field
 
-# Ищем .env файл и загружаем если найден
-env_path = find_dotenv()
-if env_path:
-    load_dotenv(env_path)
 
-@dataclass
 class Settings:
-    DATABASE_URL: str | None = field(init=False)
-    LOG_LEVEL: str | None = field(init=False)
+    def __init__(self, mode: str, base_path: Path | None = None) -> None:
+        self.mode = mode
+        self.base_path = (base_path or Path()).resolve()
 
-    def __post_init__(self) -> None:
-        self.DATABASE_URL= os.getenv('DATABASE_URL')
-        self.LOG_LEVEL= os.getenv('LOG_LEVEL', 'INFO')
+        env_files: dict[str, Path] = {
+            'prod': self.base_path / '.env',
+            'test': self.base_path / '.testenv',
+        }
+
+        self.env_file: Path | None = env_files.get(self.mode)
+        if self.env_file is None:
+            raise ValueError(f'Неизвестный режим: {mode}')
+
+        if self.env_file.exists():
+            load_dotenv(self.env_file)
+        else:
+            pass
+
+        self.DATABASE_URL = os.getenv("DATABASE_URL")
+        self.LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
         if not self.DATABASE_URL:
-            raise RuntimeError('DATABASE_URL не найден!')
+            raise RuntimeError(f'DATABASE_URL не найден!')
 
-settings = Settings()
+
+found_env = find_dotenv()
+env_path = Path(found_env).parent if found_env else Path()
+
+setting = Settings('prod', env_path)
+test_settings = Settings('test', env_path)

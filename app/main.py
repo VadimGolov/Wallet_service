@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from app.database import get_db  # твоя зависимость для сессии (Session)
 from app.schemas import WalletCreate
-from app.services import execute_wallet, execute_balance, execute_deposit, execute_payment, execute_cancel
+from app.services import execute_wallet, execute_balance, execute_deposit, execute_payment, execute_cancel, execute_clean
 
 app = FastAPI(title='Wallet Service')
 api_v1 = APIRouter(prefix='/api/v1')
@@ -90,7 +90,7 @@ def cancel_transaction(transaction_id: int, db: Session = Depends(get_db)) -> di
 # def reset_database(db: Session = Depends(get_db), include_in_schema=False) -> dict[str, str]:
 def reset_database(db: Session = Depends(get_db)) -> dict[str, str]:
     try:
-        return reset_database(db)
+        return execute_clean(db)
     except Exception:
         # Неожиданные ошибки
         db.rollback()
