@@ -1,4 +1,4 @@
-import uuid
+from uuid import uuid4, UUID
 from decimal import Decimal
 
 from sqlalchemy import delete, select
@@ -8,7 +8,7 @@ from app.models import Wallet, Transaction
 # -----------------------------------------------------------------------------
 # Вспомогательная функции (блокировка)
 # -----------------------------------------------------------------------------
-def wallet_and_lock(db: Session, wallet_uuid: str) -> Wallet | None:
+def wallet_and_lock(db: Session, wallet_uuid: UUID) -> Wallet | None:
     """
     Получает кошелёк с блокировкой строки (SELECT ... FOR UPDATE).
     """
@@ -23,7 +23,7 @@ def create_wallet(db: Session, initial_balance: Decimal = Decimal('0')) -> Walle
     Создаёт новый кошелёк с уникальным UUID и начальным балансом.
     Никаких блокировок: это INSERT новой строки.
     """
-    new_uuid = str(uuid.uuid4())
+    new_uuid = uuid4()
     new_wallet = Wallet(uuid=new_uuid, balance=initial_balance)
 
     db.add(new_wallet)
@@ -33,7 +33,7 @@ def create_wallet(db: Session, initial_balance: Decimal = Decimal('0')) -> Walle
 # -----------------------------------------------------------------------------
 # Запрос баланса (зачисление/списание)
 # -----------------------------------------------------------------------------
-def get_balance(db: Session, wallet_uuid: str) -> Wallet:
+def get_balance(db: Session, wallet_uuid: UUID) -> Wallet:
     """
     Возвращает баланс кошелька по UUID.
     Если кошелёк не найден — выбрасывает ValueError.
@@ -49,7 +49,8 @@ def get_balance(db: Session, wallet_uuid: str) -> Wallet:
 # -----------------------------------------------------------------------------
 # Изменение баланса (зачисление/списание)
 # -----------------------------------------------------------------------------
-def change_balance(db: Session, wallet_uuid: str, amount: Decimal) -> tuple[Wallet, Transaction]:
+# def change_balance(db: Session, wallet_uuid: str, amount: Decimal) -> tuple[Wallet, Transaction]:
+def change_balance(db: Session, wallet_uuid: UUID, amount: Decimal) -> Transaction:
     """
     Применяет изменение баланса кошелька под блокировкой.
 
@@ -64,21 +65,18 @@ def change_balance(db: Session, wallet_uuid: str, amount: Decimal) -> tuple[Wall
     if not wallet:
         raise ValueError(f'Кошелёк с uuid: {wallet_uuid} не найден')
 
-    # Проверка целостности: баланс не должен стать отрицательным
-    if wallet.balance + amount < 0:
-        raise ValueError("Недостаточно средств для операции")
-
     wallet.balance += amount
 
     transact = Transaction(wallet_uuid=wallet_uuid, amount=amount)
     db.add(transact)
 
-    return wallet, transact
+    return transact
+    # return wallet, transact
 
 # -----------------------------------------------------------------------------
 # Отмена транзакции
 # -----------------------------------------------------------------------------
-def cancel_transaction(db: Session, transaction_id: int) -> tuple[Wallet, Transaction]:
+def cancel_transaction(db: Session, transaction_id: int) -> Transaction:
     """
     Отмена ранее созданной транзакции:
       1. Находим транзакцию.
@@ -105,7 +103,8 @@ def cancel_transaction(db: Session, transaction_id: int) -> tuple[Wallet, Transa
     wallet.balance -= transact.amount
     db.delete(transact)
 
-    return wallet, transact
+    # return wallet, transact
+    return transact
 
 # -----------------------------------------------------------------------------
 # Для целей тестирования удаление всех записей их обеих БД

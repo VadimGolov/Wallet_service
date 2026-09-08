@@ -21,7 +21,10 @@ services:
     command: >
       sh -c "
         alembic upgrade head &&
-        pytest -v --tb=short tests/
+        printf '\n\033[32m----------------------------------------\033[0m\n' &&
+        printf '\033[32m       Запускаю Тесты...\033[0m\n' &&
+        printf '\033[32m----------------------------------------\033[0m\n' &&
+        pytest -v --tb=short --color=yes tests/
       "
     depends_on:
       db_test:

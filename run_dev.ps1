@@ -48,7 +48,7 @@ if ($delete -eq 'Y' -or $delete -eq 'y') {
 
 # Удаление старых контейнеров
 Write-Host "`n[3] Удаление старых контейнеров" -ForegroundColor Green
-docker compose down
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 
 if ($delete -eq 'Y' -or $delete -eq 'y') {
     # Удаление файлов миграций

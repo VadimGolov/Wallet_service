@@ -1,5 +1,5 @@
 from decimal import Decimal
-
+from uuid import UUID
 from sqlalchemy.orm import Session
 from app.repository import create_wallet, get_balance, change_balance, cancel_transaction, clear_data
 
@@ -16,10 +16,11 @@ def execute_wallet(db: Session, initial_balance: Decimal=Decimal('0')) -> dict[s
         'status': 'New wallet created',
         'wallet_uuid': wallet.uuid,
         'balance': wallet.balance,
+        'created_at': wallet.created_at
     }
 
 
-def execute_balance(db: Session, wallet_uuid: str) -> dict[str, str | Decimal]:
+def execute_balance(db: Session, wallet_uuid: UUID) -> dict[str, str | Decimal]:
 
     wallet = get_balance(db, wallet_uuid)
 
@@ -30,7 +31,7 @@ def execute_balance(db: Session, wallet_uuid: str) -> dict[str, str | Decimal]:
     }
 
 
-def execute_payment(db: Session, wallet_uuid: str, amount: Decimal) -> dict[str, int | str | Decimal]:
+def execute_payment(db: Session, wallet_uuid: UUID, amount: Decimal) -> dict[str, int | str | Decimal]:
     """
     Сервис для списания средств.
     Бизнес-логика: amount должен быть строго отрицательным.
@@ -38,7 +39,12 @@ def execute_payment(db: Session, wallet_uuid: str, amount: Decimal) -> dict[str,
     if amount >= 0:
         raise ValueError('Для списания amount должен быть строго отрицательным')
 
-    wallet, trans = change_balance(db, wallet_uuid, amount)
+    # wallet, trans = change_balance(db, wallet_uuid, amount)
+    trans = change_balance(db, wallet_uuid, amount)
+
+    # Баланс не должен стать отрицательным
+    if trans.wallet.balance + amount < 0:
+        raise ValueError('Недостаточно средств для операции')
 
     # Коммит делаем здесь: операция прошла все бизнес-проверки
     db.commit()
@@ -49,11 +55,11 @@ def execute_payment(db: Session, wallet_uuid: str, amount: Decimal) -> dict[str,
         'transaction_id': trans.id,
         'wallet_uuid': trans.wallet_uuid,
         'amount': trans.amount,
-        'balance_after': wallet.balance
+        'balance_after': trans.wallet.balance
     }
 
 
-def execute_deposit(db: Session, wallet_uuid: str, amount: Decimal) -> dict[str, int | str | Decimal]:
+def execute_deposit(db: Session, wallet_uuid: UUID, amount: Decimal) -> dict[str, int | str | Decimal]:
     """
     Сервис для зачисления средств.
     Бизнес-логика: amount должен быть строго положительным.
@@ -61,7 +67,8 @@ def execute_deposit(db: Session, wallet_uuid: str, amount: Decimal) -> dict[str,
     if amount <= 0:
         raise ValueError('Для зачисления amount должен быть строго положительным')
 
-    wallet, trans = change_balance(db, wallet_uuid, amount)
+    # wallet, trans = change_balance(db, wallet_uuid, amount)
+    trans = change_balance(db, wallet_uuid, amount)
 
     db.commit()
     db.refresh(trans)
@@ -71,7 +78,7 @@ def execute_deposit(db: Session, wallet_uuid: str, amount: Decimal) -> dict[str,
         'transaction_id': trans.id,
         'wallet_uuid': trans.wallet_uuid,
         'amount': trans.amount,
-        'balance_after': wallet.balance
+        'balance_after': trans.wallet.balance
     }
 
 
@@ -87,17 +94,18 @@ def execute_cancel(db: Session, transaction_id: int) -> dict[str, str | int | De
     # if wallet.owner_uuid != current_user_uuid:
     #     raise PermissionError("Вы не можете отменять чужие транзакции")
 
-    wallet, transact = cancel_transaction(db, transaction_id)
+    # wallet, transact = cancel_transaction(db, transaction_id)
+    transact = cancel_transaction(db, transaction_id)
 
     db.commit()
-    db.refresh(wallet)
+    db.refresh(transact.wallet)
 
     return {
         'status': 'Cancel completed',
         'transaction_id': transact.id,
-        'wallet_uuid': wallet.uuid,
-        'balance_after': wallet.balance,
-        'reversed_amount': transact.amount
+        'wallet_uuid': transact.wallet.uuid,
+        'reversed_amount': transact.amount,
+        'balance_after': transact.wallet.balance
     }
 
 def execute_clean(db: Session) -> dict[str, str]:

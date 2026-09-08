@@ -32,5 +32,5 @@ class Settings:
 found_env = find_dotenv()
 env_path = Path(found_env).parent if found_env else Path()
 
-setting = Settings('prod', env_path)
+settings = Settings('prod', env_path)
 test_settings = Settings('test', env_path)

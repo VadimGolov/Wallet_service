@@ -1,16 +1,18 @@
 from fastapi import APIRouter, FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from uuid import UUID
 from decimal import Decimal
 
 from app.database import get_db  # твоя зависимость для сессии (Session)
-from app.schemas import WalletCreate
+from app.schemas import CreateRequest, CreateResponse, BalanceRequest, BalanceResponse, TransactionRequest, TransactionResponse, CancelRequest, CancelResponse
 from app.services import execute_wallet, execute_balance, execute_deposit, execute_payment, execute_cancel, execute_clean
 
 app = FastAPI(title='Wallet Service')
 api_v1 = APIRouter(prefix='/api/v1')
 
-@api_v1.post('/wallet')
-def create_wallet(wallet_data: WalletCreate, db: Session = Depends(get_db)) -> dict[str, str | Decimal]:
+
+@api_v1.post('/wallet', response_model=CreateResponse)
+def create_wallet(wallet_data: CreateRequest, db: Session = Depends(get_db)) -> dict[str, str | Decimal]:
     try:
         return execute_wallet(db, wallet_data.balance)
     except ValueError as err_code:
@@ -19,11 +21,11 @@ def create_wallet(wallet_data: WalletCreate, db: Session = Depends(get_db)) -> d
             detail=str(err_code),
         )
 
-@api_v1.get('/wallets/{wallet_uuid}/balance')
-def get_balance(wallet_uuid: str, db: Session = Depends(get_db)) -> dict[str, str | Decimal]:
+
+@api_v1.get('/wallets/{wallet_uuid}/balance', response_model=BalanceResponse)
+def get_balance(wallet_data: BalanceRequest, db: Session = Depends(get_db)) -> dict[str, str | Decimal]:
     try:
-        result = execute_balance(db, wallet_uuid)
-        return result
+        return execute_balance(db, wallet_data.wallet_uuid)
     except ValueError as err_code:
         # Кошелёк не найден
         raise HTTPException(
@@ -31,15 +33,15 @@ def get_balance(wallet_uuid: str, db: Session = Depends(get_db)) -> dict[str, st
             detail=str(err_code),
         )
 
-@api_v1.post('/wallets/{wallet_uuid}/payment')
-def create_payment(wallet_uuid: str, amount: Decimal, db: Session = Depends(get_db)) -> dict[str, int | str | Decimal]:
+
+@api_v1.post('/wallets/{wallet_uuid}/payment', response_model=TransactionResponse)
+def create_payment(wallet_uuid: UUID, payload: TransactionRequest, db: Session = Depends(get_db)):
     """
-    Списание средств: amount должен быть отрицательным.
-    Пример body: {'amount': -100.00}
+        Списание средств: amount должен быть отрицательным.
+        Пример body: {'amount': -200.00}
     """
     try:
-        result = execute_payment(db, wallet_uuid, amount)
-        return result
+        return execute_payment(db, wallet_uuid, payload.amount)
     except ValueError as err_code:
         # Бизнес-ошибки (неверный знак, недостаточно средств и т.п.)
         raise HTTPException(
@@ -48,15 +50,14 @@ def create_payment(wallet_uuid: str, amount: Decimal, db: Session = Depends(get_
         )
 
 
-@api_v1.post('/wallets/{wallet_uuid}/deposit')
-def create_deposit(wallet_uuid: str, amount: Decimal, db: Session = Depends(get_db)) -> dict[str, int | str | Decimal]:
+@api_v1.post('/wallets/{wallet_uuid}/deposit', response_model=TransactionResponse)
+def create_deposit(wallet_uuid: UUID, payload: TransactionRequest, db: Session = Depends(get_db)):
     """
-    Зачисление средств: amount должен быть положительным.
-    Пример body: {'amount': 500.00}
+        Зачисление средств: amount должен быть положительным.
+        Пример body: {'amount': 500.00}
     """
     try:
-        result = execute_deposit(db, wallet_uuid, amount)
-        return result
+        return execute_deposit(db, wallet_uuid, payload.amount)
     except ValueError as err_code:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -64,15 +65,13 @@ def create_deposit(wallet_uuid: str, amount: Decimal, db: Session = Depends(get_
         )
 
 
-@api_v1.post('/transactions/{transaction_id}/cancel')
-def cancel_transaction(transaction_id: int, db: Session = Depends(get_db)) -> dict[str, str | int | Decimal]:
+@api_v1.post('/transactions/{transaction_id}/cancel', response_model=CancelResponse)
+def cancel_transaction(transact_data: CancelRequest, db: Session = Depends(get_db)) -> dict[str, str | int | Decimal]:
     """
     Отмена одной транзакции по ID.
-    Атомарно: либо всё, либо ничего.
     """
     try:
-        result = execute_cancel(db, transaction_id)
-        return result
+        return execute_cancel(db, transact_data.transaction_id)
     except ValueError as err_code:
         # Транзакция не найдена и т.п.
         raise HTTPException(

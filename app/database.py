@@ -3,7 +3,12 @@ from sqlalchemy.orm import sessionmaker
 from app.config import settings
 
 # Создаём движок (engine) — это «провод» к базе.
-engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(
+    settings.DATABASE_URL,
+    connect_args={"options": "-c timezone=utc"},
+    pool_pre_ping=True
+)
+# Команда для создания сессии
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

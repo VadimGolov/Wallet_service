@@ -9,3 +9,4 @@ python-dotenv==1.2.0
 sqlalchemy==2.0.31
 uvicorn==0.34.0
 pydantic==2.13.4
+starlette==0.41.3
