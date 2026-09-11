@@ -1,38 +1,46 @@
-from sqlalchemy import func, Column, ForeignKey
-from sqlalchemy.types import Integer, DateTime, Numeric, UUID
-from sqlalchemy.orm import DeclarativeBase, relationship
+from uuid import UUID as Py_UUID
+from datetime import datetime
+from decimal import Decimal
+
+from sqlalchemy import func, ForeignKey, String, Integer, DateTime, Numeric, Uuid
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class TransactionStatus:
+    CONFIRMED = 'CONFIRMED'
+    CANCELLED = 'CANCELLED'
+
 
 class Base(DeclarativeBase):
     pass
 
+
 class Wallet(Base):
     __tablename__ = 'wallets'
 
-    uuid = Column(UUID, primary_key=True)
-    balance = Column(
+    uuid: Mapped[Py_UUID] = mapped_column(Uuid, primary_key=True)
+    balance: Mapped[Decimal] = mapped_column(
         Numeric(precision=10, scale=2),
         server_default='0.00',
-        nullable=False,
+        nullable=False
     )
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    transactions = relationship(
-        'Transaction',
-        back_populates='wallet',
-        cascade='all, delete-orphan',
-    )
+    transactions: Mapped[list['Transaction']] = relationship(back_populates='wallet', cascade='all, delete-orphan')
+
 
 class Transaction(Base):
     __tablename__ = 'transactions'
 
-    id = Column(Integer, primary_key=True)  # autoincrement подразумевается
-    wallet_uuid = Column(
-        UUID,
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    wallet_uuid: Mapped[Py_UUID] = mapped_column(
+        Uuid,
         ForeignKey('wallets.uuid'),
         nullable=False,
-        index=True  # Оставляем, т.к. это внешний ключ, по нему часто ищут
+        index=True,
     )
-    amount = Column(Numeric(precision=10, scale=2), nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    amount: Mapped[Decimal] = mapped_column(Numeric(precision=10, scale=2), nullable=False)
+    status: Mapped[str] = mapped_column(String(10), default=TransactionStatus.CONFIRMED)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    wallet = relationship('Wallet', back_populates='transactions')
+    wallet: Mapped['Wallet'] = relationship(back_populates='transactions', lazy='joined')

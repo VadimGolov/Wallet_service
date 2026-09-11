@@ -21,27 +21,19 @@ class CreateResponse(BaseModel):
     created_at: datetime
 
 
-class BalanceRequest(BaseModel):
-    """
-    Данные от клиента при получении баланса
-    """
-    wallet_uuid: UUID
-
-
 class BalanceResponse(BaseModel):
     """
     Данные для клиента при получении баланса
     """
     status: str
     wallet_uuid: UUID
-    balance: Decimal
+    current_balance: Decimal
 
 
 class TransactionRequest(BaseModel):
     """
     Данные от клиента при изменении баланса
     """
-    wallet_uuid: UUID
     amount: Decimal  # положительное или отрицательное значение
 
 

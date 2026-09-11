@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 from decimal import Decimal
 
-from app.database import get_db  # твоя зависимость для сессии (Session)
-from app.schemas import CreateRequest, CreateResponse, BalanceRequest, BalanceResponse, TransactionRequest, TransactionResponse, CancelRequest, CancelResponse
+from app.database import get_db
+from app.schemas import (CreateRequest, CreateResponse, BalanceResponse, TransactionRequest, TransactionResponse, CancelResponse)
 from app.services import execute_wallet, execute_balance, execute_deposit, execute_payment, execute_cancel, execute_clean
 
 app = FastAPI(title='Wallet Service')
@@ -23,13 +23,29 @@ def create_wallet(wallet_data: CreateRequest, db: Session = Depends(get_db)) -> 
 
 
 @api_v1.get('/wallets/{wallet_uuid}/balance', response_model=BalanceResponse)
-def get_balance(wallet_data: BalanceRequest, db: Session = Depends(get_db)) -> dict[str, str | Decimal]:
+def get_balance(wallet_uuid: UUID, db: Session = Depends(get_db)) -> dict[str, str | Decimal]:
     try:
-        return execute_balance(db, wallet_data.wallet_uuid)
+        return execute_balance(db, wallet_uuid)
     except ValueError as err_code:
         # Кошелёк не найден
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(err_code),
+        )
+
+
+@api_v1.post('/wallets/{wallet_uuid}/deposit', response_model=TransactionResponse)
+def create_deposit(wallet_uuid: UUID, payload: TransactionRequest, db: Session = Depends(get_db)):
+    """
+        Зачисление средств: amount должен быть положительным.
+        Пример body: {'amount': 500.00}
+    """
+    try:
+        return execute_deposit(db, wallet_uuid, payload.amount)
+    except ValueError as err_code:
+        # Бизнес-ошибки (неверный знак и т.п.)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(err_code),
         )
 
@@ -50,28 +66,13 @@ def create_payment(wallet_uuid: UUID, payload: TransactionRequest, db: Session =
         )
 
 
-@api_v1.post('/wallets/{wallet_uuid}/deposit', response_model=TransactionResponse)
-def create_deposit(wallet_uuid: UUID, payload: TransactionRequest, db: Session = Depends(get_db)):
+@api_v1.post('/wallets/{wallet_uuid}/cancel', response_model=CancelResponse)
+def cancel_transaction(wallet_uuid: UUID, db: Session = Depends(get_db)) -> dict[str, str | int | UUID | Decimal]:
     """
-        Зачисление средств: amount должен быть положительным.
-        Пример body: {'amount': 500.00}
-    """
-    try:
-        return execute_deposit(db, wallet_uuid, payload.amount)
-    except ValueError as err_code:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(err_code),
-        )
-
-
-@api_v1.post('/transactions/{transaction_id}/cancel', response_model=CancelResponse)
-def cancel_transaction(transact_data: CancelRequest, db: Session = Depends(get_db)) -> dict[str, str | int | Decimal]:
-    """
-    Отмена одной транзакции по ID.
+    Отмена последней транзакции для кошелька.
     """
     try:
-        return execute_cancel(db, transact_data.transaction_id)
+        return execute_cancel(db, wallet_uuid)
     except ValueError as err_code:
         # Транзакция не найдена и т.п.
         raise HTTPException(

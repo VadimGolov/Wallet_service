@@ -3,33 +3,33 @@ services:
     image: postgres:15
     env_file:
       - .testenv
-    volumes:
-      - pgdata_test:/var/lib/postgresql/data
+    tmpfs:
+      - /var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test_user -d test_wallets"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  tests:
+  migrate:
+    build: .
+    env_file:
+      - .testenv
+    command: alembic upgrade head
+    depends_on:
+      db_test:
+        condition: service_healthy
+    restart: 'no'
+
+  test:
     build: .
     env_file:
       - .testenv
     volumes:
       - ./alembic:/app/alembic
       - ./tests:/app/tests
-    command: >
-      sh -c "
-        alembic upgrade head &&
-        printf '\n\033[32m----------------------------------------\033[0m\n' &&
-        printf '\033[32m       Запускаю Тесты...\033[0m\n' &&
-        printf '\033[32m----------------------------------------\033[0m\n' &&
-        pytest -v --tb=short --color=yes tests/
-      "
+    command: pytest -v --tb=short --color=yes tests/
     depends_on:
       db_test:
         condition: service_healthy
     restart: 'no'
-
-volumes:
-  pgdata_test:

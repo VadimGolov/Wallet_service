@@ -48,7 +48,7 @@ if ($delete -eq 'Y' -or $delete -eq 'y') {
 
 # Удаление старых контейнеров
 Write-Host "`n[3] Удаление старых контейнеров" -ForegroundColor Green
-docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v --remove-orphans
 
 if ($delete -eq 'Y' -or $delete -eq 'y') {
     # Удаление файлов миграций
@@ -91,7 +91,7 @@ Write-Host "`n[8] Миграции применены" -ForegroundColor Green
 
 # Финальный вывод
 Write-Host "`n--------------------------------------------------" -ForegroundColor Cyan
-Write-Host "Swagger доступен по адресу: http://localhost:8000" -ForegroundColor Cyan
+Write-Host "Swagger доступен по адресу: http://localhost:8000/docs" -ForegroundColor Cyan
 Write-Host "Логи: docker compose -f docker-compose.yml -f docker-compose.dev.yml logs -f" -ForegroundColor Cyan
 Write-Host "Остановка: docker compose down" -ForegroundColor Cyan
 Write-Host "--------------------------------------------------" -ForegroundColor Cyan

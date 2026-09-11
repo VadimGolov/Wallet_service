@@ -1,14 +1,14 @@
 import pytest
 from typing import Any, Generator
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, delete
 from sqlalchemy.orm import sessionmaker, Session
 from decimal import Decimal
 from functools import partial
 
 from app.main import app
 from app.database import get_db
-from app.models import Wallet
+from app.models import Wallet, Transaction
 from app.config import test_settings
 from app.services import execute_wallet
 
@@ -18,7 +18,7 @@ engine = create_engine(
     connect_args={'options': '-c timezone=utc'},
     pool_pre_ping=True
 )
-print(test_settings.DATABASE_URL)
+
 TestingSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # ---------- Вспомогательные функции (уровень модуля) -----------
@@ -28,14 +28,26 @@ def override_get_db(session: Session) -> Generator[Session, Any, None]:
     """
     yield session
 
+def override_get_db_factory() -> Generator[Any, None, None]:
+    """
+    Зависимость для конкурентных тестов: каждый запрос получает СВОЮ Session,
+    как в проде. Это позволяет запускать параллельные запросы через
+    ThreadPoolExecutor без гонки на общей Session.
+    """
+    session = TestingSession()
+    try:
+        yield session
+    finally:
+        session.close()
+
 
 def clean_tables() -> None:
     """
     Очищает таблицы transactions и wallets.
     """
     with TestingSession() as session:
-        session.execute(text('SET CONSTRAINTS ALL DEFERRED'))
-        session.execute(text('TRUNCATE TABLE transactions, wallets RESTART IDENTITY CASCADE'))
+        session.execute(delete(Transaction))
+        session.execute(delete(Wallet))
         session.commit()
 
 
@@ -50,9 +62,11 @@ def new_wallet_in_db(db_session: Session, balance: Decimal) -> Wallet | None:
 
 
 # ----------- Фикстуры -----------
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='function')
 def client() -> Generator[TestClient, Any, None]:
-    """Тестовый клиент FastAPI."""
+    """
+    Тестовый клиент FastAPI.
+    """
     with TestClient(app) as test_client:
         yield test_client
 
@@ -73,6 +87,23 @@ def db_session() -> Generator[Session, Any, None]:
 
     # Очистка таблиц
     clean_tables()
+
+
+@pytest.fixture(scope='function')
+def client_concurrent() -> Generator[TestClient, Any, None]:
+    """
+    Клиент для конкурентных тестов.
+
+    Каждый HTTP-запрос получает СВОЮ Session — это позволяет
+    запускать параллельные запросы через ThreadPoolExecutor
+    без гонки на общей Session.
+    """
+    app.dependency_overrides[get_db] = override_get_db_factory
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+    app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture(scope='function')

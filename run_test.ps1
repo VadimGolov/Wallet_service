@@ -2,32 +2,49 @@ Write-Host "`n--------------------------------------------------" -ForegroundCol
 Write-Host "Запуск Режима Тестирования..." -ForegroundColor Cyan
 Write-Host "--------------------------------------------------" -ForegroundColor Cyan
 
-# Проверяем, существует ли образ для тестового сервиса
-$image_exists = docker compose -p test -f docker-compose.test.yml ps -a
-
-if (-not $image_exists) {
-    Write-Host "`nТестоые Контейнеры пока не созданы" -ForegroundColor Yellow
-    Write-Host "`n[1] Создаю новые тестовые контейнеры..." -ForegroundColor Green
-    docker compose -p test -f docker-compose.test.yml up --build --abort-on-container-exit
-    exit 1
+# Проверяем, существуют ли контейнеры
+$containers = docker compose -f docker-compose.test.yml ps -q
+if (-not $containers) {
+    Write-Host "`n[1] Тестовые контейнеры не найдены" -ForegroundColor Yellow
+    $rebuild = 'Y'
 } else {
-    Write-Host "`nТестоые Контейнеры уже созданы" -ForegroundColor Green
+    Write-Host "`n[1] Тестовые контейнеры найдены" -ForegroundColor Green
+    Write-Host "`nВы хотите пересобрать тестовые контейнеры? (Y/N): " -NoNewline -ForegroundColor Yellow
+    $rebuild = Read-Host
 }
 
-    # Шаг 1: Спрашиваем про сборку контейнера
-Write-Host "`n[1] Вы хотите пересобрать тестовые контейнеры? (Y/N): " -NoNewline -ForegroundColor Yellow
-$delete = Read-Host
-
-if ($delete -eq 'Y' -or $delete -eq 'y') {
-    # Удаляем тестовый контейнер и volume с данными
-    Write-Host "`n[2] Удаляю тестовые контейнеры и volume с данными" -ForegroundColor Green
-    docker compose -p docker-compose.test.yml down -v
-
-    # Поднимаем новый тестовый контейнер
-    Write-Host "`n[3] Создаю новые тестовые контейнеры..." -ForegroundColor Green
-    docker compose -p test -f docker-compose.test.yml up --build --abort-on-container-exit
+if ($rebuild -eq 'Y' -or $rebuild -eq 'y') {
+    if ($containers) {
+        Write-Host "`n[2] Удаляю старые контейнеры и volume..." -ForegroundColor Yellow
+        docker compose -f docker-compose.test.yml down -v --remove-orphans --rmi local
+    }
+    Write-Host "`n[3] Собираю новые контейнеры..." -ForegroundColor Yellow
+    docker compose -f docker-compose.test.yml up --build --no-start
 } else {
-    # Поднимаем тестовый контейнер без пересборки образа
-    Write-Host "`n[2] Использую имеющийся тестовый контейнер, запускаю тесты..." -ForegroundColor Green
-    docker compose -p test -f docker-compose.test.yml up --abort-on-container-exit
+    Write-Host "`n[2] Использую существующие контейнеры..." -ForegroundColor Green
 }
+
+Write-Host "`n[4] Выполняю миграции..." -NoNewline -ForegroundColor Green
+docker compose -f docker-compose.test.yml up --abort-on-container-exit migrate
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "произошла ошибка!" -ForegroundColor Red
+    exit $LASTEXITCODE
+} else {
+    Write-Host "успешно выполнены" -ForegroundColor Green
+}
+
+Write-Host "`n--------------------------------------------------" -ForegroundColor Green
+Write-Host "Запускаю тесты" -ForegroundColor Green
+Write-Host "--------------------------------------------------" -ForegroundColor Green
+docker compose -f docker-compose.test.yml up --abort-on-container-exit test
+
+Write-Host "`n--------------------------------------------------" -ForegroundColor Cyan
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "Все тесты успешно пройдены" -ForegroundColor Green
+} else {
+    Write-Host "Есть проваленные тесты!" -ForegroundColor Red
+}
+Write-Host "--------------------------------------------------" -ForegroundColor Cyan
+
+exit $LASTEXITCODE

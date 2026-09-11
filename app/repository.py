@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
-from app.models import Wallet, Transaction
+from app.models import Wallet, Transaction, TransactionStatus
 
 # -----------------------------------------------------------------------------
 # Вспомогательная функции (блокировка)
@@ -31,7 +31,7 @@ def create_wallet(db: Session, initial_balance: Decimal = Decimal('0')) -> Walle
     return new_wallet
 
 # -----------------------------------------------------------------------------
-# Запрос баланса (зачисление/списание)
+# Запрос баланса
 # -----------------------------------------------------------------------------
 def get_balance(db: Session, wallet_uuid: UUID) -> Wallet:
     """
@@ -49,7 +49,6 @@ def get_balance(db: Session, wallet_uuid: UUID) -> Wallet:
 # -----------------------------------------------------------------------------
 # Изменение баланса (зачисление/списание)
 # -----------------------------------------------------------------------------
-# def change_balance(db: Session, wallet_uuid: str, amount: Decimal) -> tuple[Wallet, Transaction]:
 def change_balance(db: Session, wallet_uuid: UUID, amount: Decimal) -> Transaction:
     """
     Применяет изменение баланса кошелька под блокировкой.
@@ -58,52 +57,64 @@ def change_balance(db: Session, wallet_uuid: UUID, amount: Decimal) -> Transacti
       - amount < 0 → списание
       - amount > 0 → зачисление
 
-    Здесь только целостность данных: проверка на отрицательный баланс.
+    Здесь только целостность данных и проверка на отрицательный баланс.
     Проверки знака amount (бизнес-правила) должны быть в services.py.
     """
     wallet = wallet_and_lock(db, wallet_uuid)
     if not wallet:
         raise ValueError(f'Кошелёк с uuid: {wallet_uuid} не найден')
 
+    # Баланс не должен стать отрицательным
+    if wallet.balance + amount < 0:
+        raise ValueError('Недостаточно средств для операции')
+
     wallet.balance += amount
 
-    transact = Transaction(wallet_uuid=wallet_uuid, amount=amount)
+    transact = Transaction(wallet=wallet, amount=amount, status=TransactionStatus.CONFIRMED)
     db.add(transact)
 
     return transact
-    # return wallet, transact
 
 # -----------------------------------------------------------------------------
 # Отмена транзакции
 # -----------------------------------------------------------------------------
-def cancel_transaction(db: Session, transaction_id: int) -> Transaction:
+def cancel_transaction(db: Session, wallet_uuid: UUID) -> Transaction:
     """
-    Отмена ранее созданной транзакции:
-      1. Находим транзакцию.
-      2. Под блокировкой кошелька восстанавливаем баланс.
-      3. Удаляем транзакцию.
+    Отменяет последнюю транзакцию для кошелька.
+    1. Находим последнюю транзакцию для кошелька.
+    2. Под блокировкой кошелька восстанавливаем баланс.
+    3. Удаляем транзакцию.
 
-    Возвращает: (wallet, transaction) — чтобы сервис мог вернуть данные.
+    Возвращает: (Transaction)
     """
-    statement = select(Transaction).where(Transaction.id == transaction_id)
-    transact: Transaction | None  = db.execute(statement).scalars().first()
-
-    if not transact:
-        raise ValueError(f'Транзакция с id: {transaction_id} не найдена')
-
     # Блокируем кошелёк для безопасного изменения баланса
-    wallet = wallet_and_lock(db, transact.wallet_uuid)
+    wallet = wallet_and_lock(db, wallet_uuid)
 
     if not wallet:
-        raise ValueError(f'Кошелёк с uuid: {transact.wallet_uuid} не найден')
+        raise ValueError(f'Кошелёк с uuid: {wallet_uuid} не найден')
 
-    # Возвращаем ровно ту сумму, которая была в транзакции.
-    # Если было списание (amount < 0) → баланс растёт.
-    # Если было зачисление (amount > 0) → баланс падает.
+    # Находим последнюю транзакцию для кошелька
+    statement = (
+        select(Transaction)
+        .where(Transaction.wallet_uuid == wallet_uuid)
+        .order_by(Transaction.created_at.desc(), Transaction.id.desc())
+        .limit(1)
+    )
+    transact = db.execute(statement).scalars().first()
+
+    if not transact:
+        raise ValueError(f'Нет транзакций для кошелька с uuid: {wallet_uuid}')
+
+    if transact.status == TransactionStatus.CANCELLED:
+        raise ValueError(f'Последняя транзакция для кошелька с uuid: {wallet_uuid} уже была отменена')
+
+    # Привязываем wallet вручную (он уже есть в сессии и заблокирован)
+    transact.wallet = wallet
+
+    # Восстанавливаем баланса и запись нового статуса
     wallet.balance -= transact.amount
-    db.delete(transact)
+    transact.status = TransactionStatus.CANCELLED
 
-    # return wallet, transact
     return transact
 
 # -----------------------------------------------------------------------------
