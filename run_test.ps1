@@ -3,7 +3,7 @@ Write-Host "Запуск Режима Тестирования..." -ForegroundColor Cyan
 Write-Host "--------------------------------------------------" -ForegroundColor Cyan
 
 # Проверяем, существуют ли контейнеры
-$containers = docker compose -f docker-compose.test.yml ps -q
+$containers = docker compose -f docker-compose.test.yml ps -q -a
 if (-not $containers) {
     Write-Host "`n[1] Тестовые контейнеры не найдены" -ForegroundColor Yellow
     $rebuild = 'Y'
@@ -19,10 +19,12 @@ if ($rebuild -eq 'Y' -or $rebuild -eq 'y') {
         docker compose -f docker-compose.test.yml down -v --remove-orphans --rmi local
     }
     Write-Host "`n[3] Собираю новые контейнеры..." -ForegroundColor Yellow
-    docker compose -f docker-compose.test.yml up -d --build --no-start
+    docker compose -f docker-compose.test.yml build
 } else {
     Write-Host "`n[2] Использую существующие контейнеры..." -ForegroundColor Green
 }
+
+docker compose -f docker-compose.test.yml up -d --wait db_test
 
 Write-Host "`n[4] Выполняю миграции..." -ForegroundColor Green
 # docker compose -f docker-compose.test.yml up --abort-on-container-exit migrate

@@ -1,1 +1,2 @@
-from . import models
+"""Пакет приложения Wallet service."""
+__version__ = "1.0.0"

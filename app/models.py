@@ -7,8 +7,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class TransactionStatus:
-    CONFIRMED = 'CONFIRMED'
-    CANCELLED = 'CANCELLED'
+    CONFIRMED: str = 'CONFIRMED'
+    CANCELLED: str = 'CANCELLED'
 
 
 class Base(DeclarativeBase):

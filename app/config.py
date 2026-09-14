@@ -4,6 +4,9 @@ from dotenv import find_dotenv, load_dotenv
 
 
 class Settings:
+    """
+    Класс для загрузки настроек из файлов .env и .testenv
+    """
     def __init__(self, mode: str, base_path: Path | None = None) -> None:
         self.mode = mode
         self.base_path = (base_path or Path()).resolve()
@@ -29,8 +32,8 @@ class Settings:
             raise RuntimeError(f'DATABASE_URL не найден!')
 
 
-found_env = find_dotenv()
-env_path = Path(found_env).parent if found_env else Path()
+found_env: str = find_dotenv()
+env_path: Path = Path(found_env).parent if found_env else Path()
 
 settings = Settings('prod', env_path)
 test_settings = Settings('test', env_path)

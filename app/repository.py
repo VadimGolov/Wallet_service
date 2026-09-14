@@ -7,22 +7,19 @@ from app.models import Wallet, Transaction, TransactionStatus
 
 from app.exceptions import ServiceError
 
-# -----------------------------------------------------------------------------
-# Вспомогательная функции (блокировка)
-# -----------------------------------------------------------------------------
+
+# ---------- Вспомогательная функции (блокировка) ----------
 def wallet_and_lock(db: Session, wallet_uuid: UUID) -> Wallet | None:
     """
-    Получает кошелёк с блокировкой строки (SELECT ... FOR UPDATE).
+    Получает кошелек и блокирует строку (SELECT ... FOR UPDATE).
     """
     statement = select(Wallet).where(Wallet.uuid == wallet_uuid).with_for_update()
     return db.execute(statement).scalars().first()
 
-# -----------------------------------------------------------------------------
-# Создание кошелька
-# -----------------------------------------------------------------------------
+# ---------- Основные функции ----------
 def create_wallet(db: Session, initial_balance: Decimal = Decimal('0')) -> Wallet:
     """
-    Создаёт новый кошелёк с уникальным UUID и начальным балансом.
+    Создаёт новый кошелек с уникальным UUID и начальным балансом.
     Никаких блокировок: это INSERT новой строки.
     """
     new_uuid = uuid4()
@@ -32,13 +29,11 @@ def create_wallet(db: Session, initial_balance: Decimal = Decimal('0')) -> Walle
 
     return new_wallet
 
-# -----------------------------------------------------------------------------
-# Запрос баланса
-# -----------------------------------------------------------------------------
+
 def get_balance(db: Session, wallet_uuid: UUID) -> Wallet:
     """
     Возвращает баланс кошелька по UUID.
-    Если кошелёк не найден — выбрасывает ValueError.
+    Если кошелек не найден — выбрасывает ServiceError.
     """
     statement = select(Wallet).where(Wallet.uuid == wallet_uuid)
     wallet = db.execute(statement).scalars().first()
@@ -48,9 +43,7 @@ def get_balance(db: Session, wallet_uuid: UUID) -> Wallet:
 
     return wallet
 
-# -----------------------------------------------------------------------------
-# Изменение баланса (зачисление/списание)
-# -----------------------------------------------------------------------------
+
 def change_balance(db: Session, wallet_uuid: UUID, amount: Decimal) -> Transaction:
     """
     Применяет изменение баланса кошелька под блокировкой.
@@ -60,7 +53,6 @@ def change_balance(db: Session, wallet_uuid: UUID, amount: Decimal) -> Transacti
       - amount > 0 → зачисление
 
     Здесь только целостность данных и проверка на отрицательный баланс.
-    Проверки знака amount (бизнес-правила) должны быть в services.py.
     """
     wallet = wallet_and_lock(db, wallet_uuid)
     if not wallet:
@@ -77,18 +69,16 @@ def change_balance(db: Session, wallet_uuid: UUID, amount: Decimal) -> Transacti
 
     return transact
 
-# -----------------------------------------------------------------------------
-# Отмена транзакции
-# -----------------------------------------------------------------------------
+
 def cancel_transaction(db: Session, wallet_uuid: UUID) -> Transaction:
     """
     Отменяет последнюю транзакцию для кошелька.
     1. Находим последнюю транзакцию для кошелька.
+    2. Проверяем статус - если CONFIRMED продолжаем
     2. Под блокировкой кошелька восстанавливаем баланс.
-    3. Удаляем транзакцию.
-
-    Возвращает: (Transaction)
+    3. Изменяем статус на CANCELLED
     """
+
     # Блокируем кошелёк для безопасного изменения баланса
     wallet = wallet_and_lock(db, wallet_uuid)
 
@@ -110,7 +100,7 @@ def cancel_transaction(db: Session, wallet_uuid: UUID) -> Transaction:
     if transact.status == TransactionStatus.CANCELLED:
         raise ServiceError(err_message=f'Последняя транзакция для кошелька с uuid: {wallet_uuid} уже была отменена', err_code=404)
 
-    # Привязываем wallet вручную (он уже есть в сессии и заблокирован)
+    # Привязываем wallet к transact
     transact.wallet = wallet
 
     # Восстанавливаем баланса и запись нового статуса

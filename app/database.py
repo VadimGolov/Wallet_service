@@ -2,20 +2,19 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.config import settings
 
-# Создаём движок (engine) — это «провод» к базе.
+# Создаём движок
 engine = create_engine(
     settings.DATABASE_URL,
     connect_args={"options": "-c timezone=utc"},
     pool_pre_ping=True
 )
-# Команда для создания сессии
+# Создаем сессию
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def get_db():
     """
-    Зависимость для FastAPI: даёт сессию и гарантирует закрытие.
-
+    Зависимость для FastAPI: отдает сессию и гарантирует закрытие.
     """
     db = SessionLocal()
     try:

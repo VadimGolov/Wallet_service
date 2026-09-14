@@ -13,7 +13,7 @@ class CreateRequest(BaseModel):
 
 class CreateResponse(BaseModel):
     """
-    Данные для клиента после создания
+    Данные для клиента после создания кошелька
     """
     status: str
     wallet_uuid: UUID
@@ -51,7 +51,7 @@ class CancelRequest(BaseModel):
     """
     Данные от клиента для отмены операции
     """
-    transaction_id: int
+    wallet_uuid: UUID
 
 class CancelResponse(BaseModel):
     """

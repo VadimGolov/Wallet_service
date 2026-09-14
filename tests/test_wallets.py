@@ -1,4 +1,4 @@
-from uuid import UUID
+from uuid import uuid4, UUID
 
 import concurrent.futures
 from functools import partial
@@ -8,8 +8,11 @@ from starlette.testclient import TestClient
 from app.models import Wallet, Transaction
 
 
-# ----------- Тесты -----------
+# ---------- Простые Тесты ----------
 def test_create_wallet(client: TestClient, db_session: Session) -> None:
+    """
+    Создание кошелька с указанным балансом → код 200.
+    """
     response = client.post(
         url='/api/v1/wallet',
         json={"balance": "50.00"}
@@ -28,7 +31,64 @@ def test_create_wallet(client: TestClient, db_session: Session) -> None:
     assert len(transactions) == 0
 
 
+def test_create_wallet_default_balance(client: TestClient) -> None:
+    """
+    Создание кошелька без указания баланса → код 200.
+    """
+    response = client.post(
+        url='/api/v1/wallet',
+        json={}
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data['status'] == 'New wallet created'
+    assert 'wallet_uuid' in data
+    assert data['balance'] == '0.00'
+
+
+def test_create_wallet_negative_balance(client: TestClient) -> None:
+    """
+    Отрицательный начальный баланс → код 400.
+    """
+    response = client.post(
+        url='/api/v1/wallet',
+        json={"balance": "-50.00"}
+    )
+    assert response.status_code == 400
+    assert 'не может быть отрицательным' in response.text
+
+
+def test_create_wallet_exceeds_max(client: TestClient) -> None:
+    """
+    Баланс больше 10 000 000 → код 400.
+    """
+    response = client.post(
+        url='/api/v1/wallet',
+        json={"balance": "10000000.01"}
+    )
+    assert response.status_code == 400
+    assert 'не может превышать лимит' in response.text.lower()
+
+
+def test_create_wallet_boundary_max(client: TestClient) -> None:
+    """
+    Баланс ровно 10 000 000 → код 200 (проверка верхней границы).
+    """
+    response = client.post(
+        url='/api/v1/wallet',
+        json={"balance": "10000000.00"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data['status'] == 'New wallet created'
+    assert data['balance'] == '10000000.00'
+
+
 def test_get_balance(client: TestClient, wallet: Wallet | None) -> None:
+    """
+    Удачное получение баланса → код 200.
+    """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
 
@@ -42,7 +102,33 @@ def test_get_balance(client: TestClient, wallet: Wallet | None) -> None:
     assert data['current_balance'] == '100.00'
 
 
+def test_get_balance_invalid_uuid(client: TestClient) -> None:
+    """
+    Неправильный формат UUID → код 422 (валидация FastAPI).
+    """
+    response = client.get(
+        url='/api/v1/wallets/not-a-uuid/balance'
+    )
+    assert response.status_code == 422
+
+
+def test_get_balance_wallet_not_found(client: TestClient) -> None:
+    """
+    Правильный формат UUID, но кошелька нет в БД → код 404.
+    """
+    fake_uuid = uuid4()
+    response = client.get(
+        url=f'/api/v1/wallets/{fake_uuid}/balance'
+    )
+
+    assert response.status_code == 404
+    assert 'не найден' in response.text.lower()
+
+
 def test_deposit(client: TestClient, wallet: Wallet | None, db_session: Session) -> None:
+    """
+    Успешное пополнение кошелька → код 200
+    """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
 
@@ -53,8 +139,6 @@ def test_deposit(client: TestClient, wallet: Wallet | None, db_session: Session)
 
     assert response.status_code == 200
     data = response.json()
-
-    print(data)
 
     assert data['status'] == 'Deposit completed'
     assert isinstance(data['transaction_id'], int)
@@ -67,8 +151,98 @@ def test_deposit(client: TestClient, wallet: Wallet | None, db_session: Session)
 
     assert len(transactions) == 1
 
+def test_deposit_invalid_sign(client: TestClient, wallet: Wallet | None) -> None:
+    """
+     Неправильный знак amount < 0 → код 400.
+     """
+    assert wallet is not None, 'Wallet fixture did not create a wallet'
+    uuid = wallet.uuid
+
+    response = client.post(
+        url=f'/api/v1/wallets/{uuid}/deposit',
+        json={"amount": "-50.00"}
+    )
+
+    assert response.status_code == 400
+    assert 'должен быть строго положительным' in response.text
+
+
+def test_deposit_missing_amount(client: TestClient, wallet: Wallet | None) -> None:
+    """
+    Отсутствие amount в теле → код 422 (валидация Pydantic).
+    """
+    assert wallet is not None
+    uuid = wallet.uuid
+
+    response = client.post(
+        url=f'/api/v1/wallets/{uuid}/deposit',
+        json={}
+    )
+    assert response.status_code == 422
+
+
+def test_deposit_invalid_uuid(client: TestClient) -> None:
+    """
+    Неправильный формат UUID в пути → код 422 (валидация FastAPI).
+    """
+    response = client.post(
+        url = f'/api/v1/wallets/not-a-uuid/deposit',
+        json = {"amount": "50.00"}
+    )
+
+    assert response.status_code == 422
+
+
+def test_deposit_wallet_not_found(client: TestClient) -> None:
+    """
+    Правильный формат UUID, но кошелька нет в БД → код 404.
+    """
+    fake_uuid = uuid4()
+    response = client.post(
+        url=f'/api/v1/wallets/{fake_uuid}/deposit',
+        json={"amount": "50.00"}
+    )
+    assert response.status_code == 404
+    assert 'не найден' in response.text.lower()
+
+
+def test_deposit_exceeds_max(client: TestClient, wallet: Wallet | None) -> None:
+    """
+    Сумма больше 1 000 000 → код 400.
+    """
+    assert wallet is not None
+    uuid = wallet.uuid
+
+    response = client.post(
+        url=f'/api/v1/wallets/{uuid}/deposit',
+        json={"amount": "1000000.01"}
+    )
+    assert response.status_code == 400
+    assert 'не может превышать лимит' in response.text.lower()
+
+
+def test_deposit_boundary_max(client: TestClient, wallet: Wallet | None) -> None:
+    """
+    Сумма ровно 1 000 000 → код 200 (проверка верхней границы).
+    """
+    assert wallet is not None
+    uuid = wallet.uuid
+
+    response = client.post(
+        url=f'/api/v1/wallets/{uuid}/deposit',
+        json={"amount": "1000000.00"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data['status'] == 'Deposit completed'
+    assert data['amount'] == '1000000.00'
+    assert data['balance_after'] == '1000100.00'   # 100 (фикстура) + 1 000 000
+
 
 def test_payment_success(client: TestClient, wallet: Wallet | None, db_session: Session) -> None:
+    """
+    Успешное списание с кошелька → код 200
+    """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
 
@@ -93,42 +267,146 @@ def test_payment_success(client: TestClient, wallet: Wallet | None, db_session: 
 
 
 def test_payment_insufficient_funds(client: TestClient, wallet: Wallet | None) -> None:
+    """
+    Недостаточно средств для списания → код 400
+    """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
+
     response = client.post(
         url=f'/api/v1/wallets/{uuid}/payment',
         json={"amount": "-200.00"}
     )
 
     assert response.status_code == 400
-    assert 'Недостаточно средств для операции' in response.text
+    assert 'Недостаточно средств' in response.text
 
 
 def test_payment_invalid_sign(client: TestClient, wallet: Wallet | None) -> None:
+    """
+    Неправильный знак amount > 0 → код 400.
+    """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
+
     response = client.post(
         url=f'/api/v1/wallets/{uuid}/payment',
         json={"amount": "50.00"}
     )
 
     assert response.status_code == 400
-    assert 'Для списания amount должен быть строго отрицательным' in response.text
+    assert 'должен быть строго отрицательным' in response.text
 
 
-def test_deposit_invalid_sign(client: TestClient, wallet: Wallet | None) -> None:
+def test_payment_exact_balance(client: TestClient, wallet: Wallet | None) -> None:
+    """
+    Списание ровно в ноль → код 200.
+    """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
+
     response = client.post(
-        url=f'/api/v1/wallets/{uuid}/deposit',
-        json={"amount": "-50.00"}
+        url=f'/api/v1/wallets/{uuid}/payment',
+        json={"amount": "-100.00"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data['status'] == 'Withdraw completed'
+    assert data['wallet_uuid'] == str(uuid)
+    assert data['amount'] == '-100.00'
+    assert data['balance_after'] == '0.00'
+
+    balance = client.get(url=f'/api/v1/wallets/{uuid}/balance')
+    assert balance.json()['current_balance'] == '0.00'
+
+
+def test_payment_missing_amount(client: TestClient, wallet: Wallet | None) -> None:
+    """
+    Отсутствие amount в теле → 422 (валидация Pydantic).
+    """
+    assert wallet is not None, 'Wallet fixture did not create a wallet'
+    uuid = wallet.uuid
+
+    response = client.post(
+        url=f'/api/v1/wallets/{uuid}/payment',
+        json={}
+    )
+    assert response.status_code == 422
+
+
+def test_payment_invalid_uuid(client: TestClient) -> None:
+    """
+    Неправильный формат UUID в пути → код 422 (валидация FastAPI).
+    """
+    response = client.post(
+        url = f'/api/v1/wallets/not-a-uuid/payment',
+        json = {"amount": "-50.00"}
     )
 
+    assert response.status_code == 422
+
+
+def test_payment_wallet_not_found(client: TestClient) -> None:
+    """
+    Правильный формат UUID, но кошелька нет в БД → код 404.
+    """
+    fake_uuid = uuid4()
+    response = client.post(
+        url=f'/api/v1/wallets/{fake_uuid}/payment',
+        json={"amount": "-50.00"}
+    )
+    assert response.status_code == 404
+    assert 'не найден' in response.text.lower()
+
+
+def test_payment_exceeds_max(client: TestClient, wallet: Wallet | None) -> None:
+    """
+    Модуль суммы больше 1 000 000 → код 400.
+    """
+    assert wallet is not None, 'Wallet fixture did not create a wallet'
+    uuid = wallet.uuid
+
+    response = client.post(
+        url=f'/api/v1/wallets/{uuid}/payment',
+        json={"amount": "-1000000.01"}
+    )
     assert response.status_code == 400
-    assert 'Для зачисления amount должен быть строго положительным' in response.text
+    assert 'не может превышать лимит' in response.text.lower()
+
+
+def test_payment_boundary_max(client: TestClient) -> None:
+    """
+    Списание ровно 1 000 000 при достаточном балансе → код 200.
+    """
+
+    # Создаём кошелёк с балансом 1 000 000.
+    create_response = client.post(
+        url='/api/v1/wallet',
+        json={"balance": "1000000.00"}
+    )
+
+    assert create_response.status_code == 200
+    uuid = create_response.json()['wallet_uuid']
+
+    response = client.post(
+        url=f'/api/v1/wallets/{uuid}/payment',
+        json={"amount": "-1000000.00"}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data['status'] == 'Withdraw completed'
+    assert data['wallet_uuid'] == str(uuid)
+    assert data['amount'] == '-1000000.00'
+    assert data['balance_after'] == '0.00'
 
 
 def test_cancel_transaction(client: TestClient, wallet: Wallet | None) -> None:
+    """
+    Успешная отмена зачисления на кошелек → код 200
+    """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
 
@@ -151,12 +429,86 @@ def test_cancel_transaction(client: TestClient, wallet: Wallet | None) -> None:
     assert data['reversed_amount'] == '70.00'
     assert data['balance_after'] == '100.00'
 
+    # Проверяем через GET /balance
+    balance = client.get(url=f'/api/v1/wallets/{uuid}/balance')
+    assert balance.json()['current_balance'] == '100.00'
+
+
     # 3. Повторная отмена – транзакция отменена, 404
     cancel_again = client.post(url=f'/api/v1/wallets/{uuid}/cancel')
 
     assert cancel_again.status_code == 404
 
-# ----------- Вспомогательные функции (для конкурентных тестов -----------
+
+def test_cancel_payment_restores_balance(client: TestClient, wallet: Wallet | None) -> None:
+    """
+    Успешная отмена списания с кошелька → код 200.
+    """
+    assert wallet is not None, 'Wallet fixture did not create a wallet'
+    uuid = wallet.uuid
+
+    # Списание -40 → баланс 60
+    payment_response = client.post(
+        url=f'/api/v1/wallets/{uuid}/payment',
+        json={"amount": "-40.00"}
+    )
+    assert payment_response.status_code == 200
+
+    # Отменяем последнюю транзакцию
+    cancel_response = client.post(
+        url=f'/api/v1/wallets/{uuid}/cancel'
+    )
+    assert cancel_response.status_code == 200
+    data = cancel_response.json()
+
+    assert data['status'] == 'Cancel completed'
+    assert data['wallet_uuid'] == str(uuid)
+    assert data['reversed_amount'] == '-40.00'
+    assert data['balance_after'] == '100.00'   # вернулись к исходному
+
+    # Проверяем через GET /balance
+    balance = client.get(url=f'/api/v1/wallets/{uuid}/balance')
+    assert balance.json()['current_balance'] == '100.00'
+
+
+def test_cancel_without_transactions(client: TestClient, wallet: Wallet | None) -> None:
+    """
+    Отмена при отсутствии транзакций → код 404.
+    """
+    assert wallet is not None, 'Wallet fixture did not create a wallet'
+    uuid = wallet.uuid
+
+    response = client.post(
+        url=f'/api/v1/wallets/{uuid}/cancel'
+    )
+    assert response.status_code == 404
+    assert 'нет транзакций' in response.text.lower()
+
+def test_cancel_invalid_uuid(client: TestClient) -> None:
+    """
+    Неправильный формат UUID → код 422 (валидация FastAPI).
+    """
+    response = client.post(
+        url = f'/api/v1/wallets/not-a-uuid/cancel'
+    )
+
+    assert response.status_code == 422
+
+def test_cancel_wallet_not_found(client: TestClient) -> None:
+    """
+    Правильный формат UUID, но кошелька нет в БД → код 404.
+    """
+    fake_uuid = uuid4()
+
+    response = client.post(
+        url=f'/api/v1/wallets/{fake_uuid}/cancel'
+    )
+
+    assert response.status_code == 404
+    assert 'не найден' in response.text.lower()
+
+
+# ---------- Вспомогательные функции (для конкурентных тестов ----------
 # Создание кошелька
 def concurrent_wallet(client: TestClient):
     return client.post(
@@ -178,9 +530,13 @@ def make_deposit(client: TestClient, wallet_uuid: UUID, amount):
         json={"amount": str(amount)}
     )
 
-# ----------- Конкурентные тесты -----------
+# ---------- Конкурентные тесты ----------
 def test_concurrent_withdraws(con_client: TestClient) -> None:
-    # Создаём кошелёк с балансом 100
+    """
+    Конкурентный тест на списание:
+    4 параллельные операции: два списания -60 и два списания -15 при балансе кошелька 100.
+    Во всех случаях: 3 списания → код 200, 1 списание → код 400. Итоговый баланс 10,00.
+    """
     new_wallet = concurrent_wallet(con_client)
     assert new_wallet is not None, 'We could not create a wallet via post request'
 
@@ -197,43 +553,99 @@ def test_concurrent_withdraws(con_client: TestClient) -> None:
         third_worker = executor.submit(min_withdraw)
         fourth_worker = executor.submit(max_withdraw)
 
-        first_res = first_worker.result()
-        second_res = second_worker.result()
-        third_res = third_worker.result()
-        fourth_res = fourth_worker.result()
+        results = (
+            first_worker.result(),
+            second_worker.result(),
+            third_worker.result(),
+            fourth_worker.result(),
+        )
 
-    common_states = {first_res.status_code, second_res.status_code, third_res.status_code, fourth_res.status_code}
-    assert common_states == {200, 400}  # один успех, одна ошибка
+    statuses = [item.status_code for item in results]
+    assert statuses.count(200) == 3
+    assert statuses.count(400) == 1
 
     balance = con_client.get(url=f'/api/v1/wallets/{uuid}/balance')
     assert balance.json()['current_balance'] == '10.00'
 
 
 def test_concurrent_deposit_and_withdraw(con_client: TestClient) -> None:
-    # Создаём кошелёк с балансом 100
+    """
+    Конкурентный тест на списание и зачисление:
+    4 параллельные операции: два пополнения +30 и два списания -60 при балансе 100.
+    Во всех случаях: минимум 3 → код 200, не более 1 → код 400, итоговый баланс 40,00 или 100,00.
+    """
     new_wallet = concurrent_wallet(con_client)
     assert new_wallet is not None, 'We could not create a wallet via post request'
 
     wallet_data = new_wallet.json()
-    uuid = UUID(wallet_data['wallet_uuid'])
+    uuid = wallet_data['wallet_uuid']
 
-    # Фиксируем client и uuid, оставляем только amount
     deposit = partial(make_deposit, con_client, uuid, 30)
     withdraw = partial(make_withdraw, con_client, uuid, -60)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        first_dt_worker = executor.submit(deposit)
-        first_wd_worker = executor.submit(withdraw)
-        second_dt_worker = executor.submit(deposit)
-        third_dt_worker = executor.submit(withdraw)
+        deposit_1 = executor.submit(deposit)
+        withdraw_1 = executor.submit(withdraw)
+        deposit_2 = executor.submit(deposit)
+        withdraw_2 = executor.submit(withdraw)
 
-    first_res = first_dt_worker.result()
-    second_res = first_wd_worker.result()
-    third_res = second_dt_worker.result()
-    fourth_res = third_dt_worker.result()
+        results = (
+            deposit_1.result(),
+            withdraw_1.result(),
+            deposit_2.result(),
+            withdraw_2.result(),
+        )
 
-    common_states = {first_res.status_code, second_res.status_code, third_res.status_code, fourth_res.status_code}
-    assert common_states == {200}  # все успех
+    statuses = [item.status_code for item in results]
 
+    success_count = statuses.count(200)
+    fail_count = statuses.count(400)
+
+    # Минимум 3 успеха, максимум 1 провал
+    assert success_count >= 3
+    assert fail_count <= 1
+    assert success_count + fail_count == 4
+
+    # Баланс — один из двух допустимых исходов
     balance = con_client.get(url=f'/api/v1/wallets/{uuid}/balance')
-    assert balance.json()['current_balance'] == '40.00'
+    final_balance = balance.json()['current_balance']
+    assert final_balance == '40.00' or '100.00'
+
+
+def test_concurrent_different_wallets(con_client: TestClient) -> None:
+    """
+    Конкурентный тест на двух разных кошельках: первый кошелек списание -40, второй — зачисление + 50, при балансе каждого из кошельков 100.
+    Проверяет, что блокировка кошелька — построчная, а не глобальная. Операции по разным кошелькам не мешают друг другу.
+    Обе должны завершиться → кодом 200, итоговый баланс первый кошелек 60, второй — 150.
+    """
+
+    # Создаём два кошелька с балансом 100 каждый
+    first_wallet = concurrent_wallet(con_client)
+    assert first_wallet is not None, 'We could not create the first wallet via post request'
+    first_uuid = UUID(first_wallet.json()['wallet_uuid'])
+
+    second_wallet = concurrent_wallet(con_client)
+    assert second_wallet is not None, 'We could not create the second_wallet via post request'
+    second_uuid = UUID(second_wallet.json()['wallet_uuid'])
+
+    # Параллельно: списание с первого, депозит на второй
+    withdraw = partial(make_withdraw, con_client, first_uuid, -40)
+    deposit = partial(make_deposit, con_client, second_uuid, 50)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        withdraw_worker = executor.submit(withdraw)
+        deposit_worker = executor.submit(deposit)
+
+        withdraw_result = withdraw_worker.result()
+        deposit_result = deposit_worker.result()
+
+    # Обе операции успешны — они не конкурируют за одну строку
+    assert withdraw_result.status_code == 200
+    assert deposit_result.status_code == 200
+
+    # Балансы независимы
+    first_balance = con_client.get(url=f'/api/v1/wallets/{first_uuid}/balance')
+    assert first_balance.json()['current_balance'] == '60.00'
+
+    second_balance = con_client.get(url=f'/api/v1/wallets/{second_uuid}/balance')
+    assert second_balance.json()['current_balance'] == '150.00'

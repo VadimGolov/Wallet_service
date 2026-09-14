@@ -48,7 +48,7 @@ if ($delete -eq 'Y' -or $delete -eq 'y') {
 
 # Удаление старых контейнеров
 Write-Host "`n[3] Удаление старых контейнеров" -ForegroundColor Green
-docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v --remove-orphans --rmi local
 
 if ($delete -eq 'Y' -or $delete -eq 'y') {
     # Удаление файлов миграций
@@ -61,10 +61,8 @@ if ($delete -eq 'Y' -or $delete -eq 'y') {
 
 # Создание новых контейнеров
 Write-Host "`n[5] Создание новых контейнеров" -ForegroundColor Green
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
-
-# Пауза, чтобы контейнеры запустились
-Start-Sleep -Seconds 3
+docker compose -f docker-compose.yml -f docker-compose.dev.yml build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --wait db
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "`nНе удалось инициализировать базу данных, для исправления перезапустите скрипт`n" -ForegroundColor Red

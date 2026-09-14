@@ -12,7 +12,7 @@ from app.models import Wallet, Transaction
 from app.config import test_settings
 from app.services import execute_wallet
 
-# ---------- Настройка тестовой БД -----------
+# ---------- Настройка тестовой БД ----------
 engine = create_engine(
     test_settings.DATABASE_URL,
     connect_args={'options': '-c timezone=utc'},
@@ -21,12 +21,25 @@ engine = create_engine(
 
 TestingSession = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# ---------- Вспомогательные функции (уровень модуля) -----------
+# ---------- Настройка вывода Pytest ----------
+
+def pytest_runtest_setup(item):
+    """
+    Печатает docstring теста перед запуском.
+    """
+    doc_str = item.function.__doc__
+    if doc_str:
+        print(doc_str)
+
+# ---------- Вспомогательные функции (уровень модуля) ----------
 def override_get_db(session: Session) -> Generator[Session, Any, None]:
     """
     Генератор-зависимость для подмены get_db.
     """
-    yield session
+    try:
+        yield session
+    finally:
+        session.close()
 
 def override_get_db_factory() -> Generator[Any, None, None]:
     """
@@ -61,7 +74,7 @@ def new_wallet_in_db(db_session: Session, balance: Decimal) -> Wallet | None:
     return wallet
 
 
-# ----------- Фикстуры -----------
+# ---------- Фикстуры ----------
 @pytest.fixture(scope='function')
 def client(db_session: Session) -> Generator[TestClient, Any, None]:
     """
@@ -118,6 +131,6 @@ def create_wallet(db_session: Session) -> partial:
 @pytest.fixture(scope='function')
 def wallet(create_wallet) -> Wallet | None:
     """
-    Кошелёк с балансом 100 для упрощения.
+    Кошелёк с балансом 100.
     """
     return create_wallet(Decimal('100'))
