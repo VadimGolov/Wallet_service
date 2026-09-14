@@ -28,7 +28,7 @@ def test_create_wallet(client: TestClient, db_session: Session) -> None:
     assert len(transactions) == 0
 
 
-def test_get_balance(client: TestClient, wallet: Wallet | None, db_session: Session) -> None:
+def test_get_balance(client: TestClient, wallet: Wallet | None) -> None:
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
 
@@ -157,31 +157,12 @@ def test_cancel_transaction(client: TestClient, wallet: Wallet | None) -> None:
     assert cancel_again.status_code == 404
 
 # ----------- Вспомогательные функции (для конкурентных тестов -----------
-def override_get_db_factory() -> Generator[Session, Any, None]:
-    """
-    Каждому запросу — своя сессия, как в проде.
-    """
-    session = TestingSession()
-    try:
-        yield session
-    finally:
-        session.close()
-
-app.dependency_overrides[get_db] = override_get_db
-
-with TestClient(app) as test_client:
-    yield test_client
-
-app.dependency_overrides.pop(get_db, None)
-
-
-
-
-
-
-
-
-
+# Создание кошелька
+def concurrent_wallet(client: TestClient):
+    return client.post(
+        url='/api/v1/wallet',
+        json={"balance": "100.00"}
+    )
 
 # Списание средств
 def make_withdraw(client: TestClient, wallet_uuid, amount):
@@ -197,85 +178,62 @@ def make_deposit(client: TestClient, wallet_uuid: UUID, amount):
         json={"amount": str(amount)}
     )
 
-
-def _run_in_own_session(func, wallet_uuid, amount):
-    """
-    Запускает сервисную функцию в отдельной сессии.
-    Возвращает (status, result_or_error).
-    """
-    session: Session = TestingSession()
-    try:
-        result = func(session, wallet_uuid, amount)
-        return ('ok', result)
-    except Exception as exc:
-        return ('err', exc)
-    finally:
-        session.close()
-
 # ----------- Конкурентные тесты -----------
-def test_concurrent_withdrawals(client: TestClient, wallet: Wallet | None) -> None:
-    assert wallet is not None, 'Wallet fixture did not create a wallet'
-    uuid = wallet.uuid
+def test_concurrent_withdraws(con_client: TestClient) -> None:
+    # Создаём кошелёк с балансом 100
+    new_wallet = concurrent_wallet(con_client)
+    assert new_wallet is not None, 'We could not create a wallet via post request'
+
+    wallet_data = new_wallet.json()
+    uuid = UUID(wallet_data['wallet_uuid'])
 
     # Фиксируем client и uuid, оставляем только amount
-    withdraw = partial(make_withdraw, client, uuid, -60)
+    max_withdraw = partial(make_withdraw, con_client, uuid, -60)
+    min_withdraw = partial(make_withdraw, con_client, uuid, -15)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        first_worker = executor.submit(withdraw)
-        second_worker = executor.submit(withdraw)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        first_worker = executor.submit(max_withdraw)
+        second_worker = executor.submit(min_withdraw)
+        third_worker = executor.submit(min_withdraw)
+        fourth_worker = executor.submit(max_withdraw)
 
-        first_result, second_result = first_worker.result(), second_worker.result()
+        first_res = first_worker.result()
+        second_res = second_worker.result()
+        third_res = third_worker.result()
+        fourth_res = fourth_worker.result()
 
-    response = {first_result.status_code, second_result.status_code}
-    assert response == {200, 400}  # один успех, одна ошибка
+    common_states = {first_res.status_code, second_res.status_code, third_res.status_code, fourth_res.status_code}
+    assert common_states == {200, 400}  # один успех, одна ошибка
 
-    balance = client.get(url=f'/api/v1/wallets/{uuid}/balance')
+    balance = con_client.get(url=f'/api/v1/wallets/{uuid}/balance')
+    assert balance.json()['current_balance'] == '10.00'
+
+
+def test_concurrent_deposit_and_withdraw(con_client: TestClient) -> None:
+    # Создаём кошелёк с балансом 100
+    new_wallet = concurrent_wallet(con_client)
+    assert new_wallet is not None, 'We could not create a wallet via post request'
+
+    wallet_data = new_wallet.json()
+    uuid = UUID(wallet_data['wallet_uuid'])
+
+    # Фиксируем client и uuid, оставляем только amount
+    deposit = partial(make_deposit, con_client, uuid, 30)
+    withdraw = partial(make_withdraw, con_client, uuid, -60)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        first_dt_worker = executor.submit(deposit)
+        first_wd_worker = executor.submit(withdraw)
+        second_dt_worker = executor.submit(deposit)
+        third_dt_worker = executor.submit(withdraw)
+
+    first_res = first_dt_worker.result()
+    second_res = first_wd_worker.result()
+    third_res = second_dt_worker.result()
+    fourth_res = third_dt_worker.result()
+
+    common_states = {first_res.status_code, second_res.status_code, third_res.status_code, fourth_res.status_code}
+    assert common_states == {200}  # все успех
+
+    balance = con_client.get(url=f'/api/v1/wallets/{uuid}/balance')
     assert balance.json()['current_balance'] == '40.00'
-
-
-def _run_in_own_session(func, wallet_uuid, amount):
-    """
-    Запускает сервисную функцию в отдельной сессии.
-    Возвращает (status, result_or_error).
-    """
-    session: Session = TestingSession()
-    try:
-        result = func(session, wallet_uuid, amount)
-        return ('ok', result)
-    except Exception as exc:
-        return ('err', exc)
-    finally:
-        session.close()
-
-
-def test_concurrent_deposit_and_withdraw(wallet: Wallet | None) -> None:
-    assert wallet is not None, 'Wallet fixture did not create a wallet'
-    uuid = wallet.uuid
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        deposit_future = executor.submit(
-            _run_in_own_session, make_deposit, uuid, Decimal('30')
-        )
-        withdraw_future = executor.submit(
-            _run_in_own_session, make_withdraw, uuid, Decimal('-40')
-        )
-
-        deposit_status, deposit_result = deposit_future.result()
-        withdraw_status, withdraw_result = withdraw_future.result()
-
-    # Обе операции должны завершиться успешно
-    assert deposit_status == 'ok', f'deposit failed: {deposit_result!r}'
-    assert withdraw_status == 'ok', f'withdraw failed: {withdraw_result!r}'
-
-    # Проверяем итоговый баланс отдельной сессией
-    check_session: Session = TestingSession()
-    try:
-        check_session.expire_all()
-        wallet_after = (
-            check_session.query(Wallet).filter(Wallet.uuid == uuid).one()
-        )
-        assert wallet_after.balance == Decimal('90.00'), (
-            f'expected 90.00, got {wallet_after.balance}'
-        )
-    finally:
-        check_session.close()

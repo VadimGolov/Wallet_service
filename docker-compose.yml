@@ -21,7 +21,6 @@ services:
       db:
         condition: service_healthy
 
-
   web:
     build: .
     container_name: wallet-web

@@ -3,13 +3,25 @@ from decimal import Decimal
 from datetime import datetime
 
 from sqlalchemy.orm import Session
-from app.repository import create_wallet, get_balance, change_balance, cancel_transaction, clear_data
+from app.repository import create_wallet, get_balance, change_balance, cancel_transaction
+
+from app.exceptions import ServiceError
+
+
+class ActionLimits:
+  """
+  Класс для хранения лимитов на операции
+  """
+  CREATION = Decimal('10_000_000.00')
+  DEPOSIT = Decimal('1_000_000.00')
 
 
 def execute_wallet(db: Session, initial_balance: Decimal=Decimal('0')) -> dict[str, str | UUID | Decimal | datetime]:
-    if initial_balance < 0:
-        raise ValueError("Начальный баланс не может быть отрицательным")
 
+    if initial_balance < 0:
+        raise ServiceError(err_message='Начальный баланс не может быть отрицательным')
+    if initial_balance > ActionLimits.CREATION:
+        raise ServiceError(err_message=f'Начальный баланс не может превышать лимит в {ActionLimits.CREATION/1_000_000} миллионов')
     wallet = create_wallet(db, initial_balance)
 
     db.commit()
@@ -40,7 +52,10 @@ def execute_deposit(db: Session, wallet_uuid: UUID, amount: Decimal) -> dict[str
     Бизнес-логика: amount должен быть строго положительным.
     """
     if amount <= 0:
-        raise ValueError('Для зачисления amount должен быть строго положительным')
+        raise ServiceError(err_message='Для зачисления amount должен быть строго положительным')
+    if amount > ActionLimits.DEPOSIT:
+        raise ServiceError(err_message=f'Сумма зачисления не может превышать лимит в {ActionLimits.DEPOSIT/1_000_000} миллион')
+
 
     trans = change_balance(db, wallet_uuid, amount)
 
@@ -62,7 +77,9 @@ def execute_payment(db: Session, wallet_uuid: UUID, amount: Decimal) -> dict[str
     Бизнес-логика: amount должен быть строго отрицательным.
     """
     if amount >= 0:
-        raise ValueError('Для списания amount должен быть строго отрицательным')
+        raise ServiceError(err_message='Для списания amount должен быть строго отрицательным')
+    if abs(amount) > ActionLimits.DEPOSIT:
+        raise ServiceError(err_message=f'Сумма списания amount не может превышать лимит в {ActionLimits.DEPOSIT/1_000_000} миллион')
 
     trans = change_balance(db, wallet_uuid, amount)
 
@@ -103,14 +120,3 @@ def execute_cancel(db: Session, wallet_uuid: UUID) -> dict[str, str | int | UUID
         'reversed_amount': trans.amount,
         'balance_after': trans.wallet.balance
     }
-
-
-def execute_clean(db: Session) -> dict[str, str]:
-    """
-    Удаляет все данные из wallets и transactions.
-    Гарантирует атомарность: либо всё удалится, либо ничего.
-    """
-    clear_data(db)
-    db.commit()
-
-    return {'status': 'All data deleted successfully'}

@@ -63,7 +63,7 @@ def new_wallet_in_db(db_session: Session, balance: Decimal) -> Wallet | None:
 
 # ----------- Фикстуры -----------
 @pytest.fixture(scope='function')
-def client() -> Generator[TestClient, Any, None]:
+def client(db_session: Session) -> Generator[TestClient, Any, None]:
     """
     Тестовый клиент FastAPI.
     """
@@ -90,7 +90,7 @@ def db_session() -> Generator[Session, Any, None]:
 
 
 @pytest.fixture(scope='function')
-def client_concurrent() -> Generator[TestClient, Any, None]:
+def con_client() -> Generator[TestClient, Any, None]:
     """
     Клиент для конкурентных тестов.
 

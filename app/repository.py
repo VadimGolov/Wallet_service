@@ -1,9 +1,11 @@
 from uuid import uuid4, UUID
 from decimal import Decimal
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.models import Wallet, Transaction, TransactionStatus
+
+from app.exceptions import ServiceError
 
 # -----------------------------------------------------------------------------
 # Вспомогательная функции (блокировка)
@@ -42,7 +44,7 @@ def get_balance(db: Session, wallet_uuid: UUID) -> Wallet:
     wallet = db.execute(statement).scalars().first()
 
     if not wallet:
-        raise ValueError(f'Кошелёк с uuid: {wallet_uuid} не найден')
+        raise ServiceError(err_message=f'Кошелёк с uuid: {wallet_uuid} не найден', err_code=404)
 
     return wallet
 
@@ -62,11 +64,11 @@ def change_balance(db: Session, wallet_uuid: UUID, amount: Decimal) -> Transacti
     """
     wallet = wallet_and_lock(db, wallet_uuid)
     if not wallet:
-        raise ValueError(f'Кошелёк с uuid: {wallet_uuid} не найден')
+        raise ServiceError(err_message=f'Кошелёк с uuid: {wallet_uuid} не найден', err_code=404)
 
     # Баланс не должен стать отрицательным
     if wallet.balance + amount < 0:
-        raise ValueError('Недостаточно средств для операции')
+        raise ServiceError(err_message='Недостаточно средств для операции')
 
     wallet.balance += amount
 
@@ -91,7 +93,7 @@ def cancel_transaction(db: Session, wallet_uuid: UUID) -> Transaction:
     wallet = wallet_and_lock(db, wallet_uuid)
 
     if not wallet:
-        raise ValueError(f'Кошелёк с uuid: {wallet_uuid} не найден')
+        raise ServiceError(err_message=f'Кошелёк с uuid: {wallet_uuid} не найден', err_code=404)
 
     # Находим последнюю транзакцию для кошелька
     statement = (
@@ -103,10 +105,10 @@ def cancel_transaction(db: Session, wallet_uuid: UUID) -> Transaction:
     transact = db.execute(statement).scalars().first()
 
     if not transact:
-        raise ValueError(f'Нет транзакций для кошелька с uuid: {wallet_uuid}')
+        raise ServiceError(err_message=f'Нет транзакций для кошелька с uuid: {wallet_uuid}', err_code=404)
 
     if transact.status == TransactionStatus.CANCELLED:
-        raise ValueError(f'Последняя транзакция для кошелька с uuid: {wallet_uuid} уже была отменена')
+        raise ServiceError(err_message=f'Последняя транзакция для кошелька с uuid: {wallet_uuid} уже была отменена', err_code=404)
 
     # Привязываем wallet вручную (он уже есть в сессии и заблокирован)
     transact.wallet = wallet
@@ -116,16 +118,3 @@ def cancel_transaction(db: Session, wallet_uuid: UUID) -> Transaction:
     transact.status = TransactionStatus.CANCELLED
 
     return transact
-
-# -----------------------------------------------------------------------------
-# Для целей тестирования удаление всех записей их обеих БД
-# -----------------------------------------------------------------------------
-
-def clear_data(session: Session) -> None:
-    """
-    Удаляет ВСЕ записи из таблиц wallets и transactions.
-    """
-    # Сначала транзакции, потому что в них есть ForeignKey
-    session.execute(delete(Transaction))
-    # Потом кошельки
-    session.execute(delete(Wallet))
