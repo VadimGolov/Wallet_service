@@ -2,6 +2,7 @@ from uuid import uuid4, UUID
 
 import concurrent.futures
 from functools import partial
+
 from sqlalchemy.orm import Session
 from starlette.testclient import TestClient
 
@@ -11,7 +12,8 @@ from app.models import Wallet, Transaction
 # ---------- Простые Тесты ----------
 def test_create_wallet(client: TestClient, db_session: Session) -> None:
     """
-    Создание кошелька с указанным балансом → код 200.
+    Создание кошелька с указанным балансом → код 200 [успешно],
+    Проверка отсутствия транзакции при создании [успешно].
     """
     response = client.post(
         url='/api/v1/wallet',
@@ -33,7 +35,7 @@ def test_create_wallet(client: TestClient, db_session: Session) -> None:
 
 def test_create_wallet_default_balance(client: TestClient) -> None:
     """
-    Создание кошелька без указания баланса → код 200.
+    Создание кошелька без указания баланса → код 200 [успешно].
     """
     response = client.post(
         url='/api/v1/wallet',
@@ -49,7 +51,7 @@ def test_create_wallet_default_balance(client: TestClient) -> None:
 
 def test_create_wallet_negative_balance(client: TestClient) -> None:
     """
-    Отрицательный начальный баланс → код 400.
+    Попытка создания кошелька с отрицательным начальным балансом → код 400 [ошибка].
     """
     response = client.post(
         url='/api/v1/wallet',
@@ -61,7 +63,7 @@ def test_create_wallet_negative_balance(client: TestClient) -> None:
 
 def test_create_wallet_exceeds_max(client: TestClient) -> None:
     """
-    Баланс больше 10 000 000 → код 400.
+    Попытка создания кошелька с балансом больше 10 000 000 → код 400 [ошибка].
     """
     response = client.post(
         url='/api/v1/wallet',
@@ -73,7 +75,7 @@ def test_create_wallet_exceeds_max(client: TestClient) -> None:
 
 def test_create_wallet_boundary_max(client: TestClient) -> None:
     """
-    Баланс ровно 10 000 000 → код 200 (проверка верхней границы).
+    Создание кошелька с балансом ровно 10 000 000 → код 200 [успешно] (проверка верхней границы).
     """
     response = client.post(
         url='/api/v1/wallet',
@@ -87,7 +89,7 @@ def test_create_wallet_boundary_max(client: TestClient) -> None:
 
 def test_get_balance(client: TestClient, wallet: Wallet | None) -> None:
     """
-    Удачное получение баланса → код 200.
+    Удачное получение баланса кошелька → код 200 [успешно].
     """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
@@ -104,7 +106,7 @@ def test_get_balance(client: TestClient, wallet: Wallet | None) -> None:
 
 def test_get_balance_invalid_uuid(client: TestClient) -> None:
     """
-    Неправильный формат UUID → код 422 (валидация FastAPI).
+    Попытка получения баланса с неправильным форматом UUID → код 422 [ошибка] (валидация FastAPI).
     """
     response = client.get(
         url='/api/v1/wallets/not-a-uuid/balance'
@@ -114,7 +116,7 @@ def test_get_balance_invalid_uuid(client: TestClient) -> None:
 
 def test_get_balance_wallet_not_found(client: TestClient) -> None:
     """
-    Правильный формат UUID, но кошелька нет в БД → код 404.
+    Попытка получения баланса с правильным форматом UUID, но отсутствием кошелька в БД → код 404 [ошибка].
     """
     fake_uuid = uuid4()
     response = client.get(
@@ -127,7 +129,8 @@ def test_get_balance_wallet_not_found(client: TestClient) -> None:
 
 def test_deposit(client: TestClient, wallet: Wallet | None, db_session: Session) -> None:
     """
-    Успешное пополнение кошелька → код 200
+    Успешное пополнение кошелька → код 200 [успешно]
+    Проверка, что транзакция создана [успешно]
     """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
@@ -153,7 +156,7 @@ def test_deposit(client: TestClient, wallet: Wallet | None, db_session: Session)
 
 def test_deposit_invalid_sign(client: TestClient, wallet: Wallet | None) -> None:
     """
-     Неправильный знак amount < 0 → код 400.
+     Попытка пополнения с неправильным знаком amount < 0 → код 400 [ошибка].
      """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
@@ -169,7 +172,7 @@ def test_deposit_invalid_sign(client: TestClient, wallet: Wallet | None) -> None
 
 def test_deposit_missing_amount(client: TestClient, wallet: Wallet | None) -> None:
     """
-    Отсутствие amount в теле → код 422 (валидация Pydantic).
+    Попытка пополнения с отсутствием amount в теле запроса → код 422 [ошибка] (валидация Pydantic).
     """
     assert wallet is not None
     uuid = wallet.uuid
@@ -183,7 +186,7 @@ def test_deposit_missing_amount(client: TestClient, wallet: Wallet | None) -> No
 
 def test_deposit_invalid_uuid(client: TestClient) -> None:
     """
-    Неправильный формат UUID в пути → код 422 (валидация FastAPI).
+    Попытка пополнения с неправильным форматом UUID в пути → код 422 [ошибка] (валидация FastAPI).
     """
     response = client.post(
         url = f'/api/v1/wallets/not-a-uuid/deposit',
@@ -195,7 +198,7 @@ def test_deposit_invalid_uuid(client: TestClient) -> None:
 
 def test_deposit_wallet_not_found(client: TestClient) -> None:
     """
-    Правильный формат UUID, но кошелька нет в БД → код 404.
+    Попытка пополнения с правильным форматом UUID, но отсутствием кошелька в БД → код 404 [ошибка].
     """
     fake_uuid = uuid4()
     response = client.post(
@@ -208,7 +211,7 @@ def test_deposit_wallet_not_found(client: TestClient) -> None:
 
 def test_deposit_exceeds_max(client: TestClient, wallet: Wallet | None) -> None:
     """
-    Сумма больше 1 000 000 → код 400.
+    Попытка пополнения на сумму более 1 000 000 → код 400 [ошибка].
     """
     assert wallet is not None
     uuid = wallet.uuid
@@ -223,7 +226,7 @@ def test_deposit_exceeds_max(client: TestClient, wallet: Wallet | None) -> None:
 
 def test_deposit_boundary_max(client: TestClient, wallet: Wallet | None) -> None:
     """
-    Сумма ровно 1 000 000 → код 200 (проверка верхней границы).
+    Пополнение суммой ровно 1 000 000 → код 200 [успешно] (проверка верхней границы).
     """
     assert wallet is not None
     uuid = wallet.uuid
@@ -241,7 +244,8 @@ def test_deposit_boundary_max(client: TestClient, wallet: Wallet | None) -> None
 
 def test_payment_success(client: TestClient, wallet: Wallet | None, db_session: Session) -> None:
     """
-    Успешное списание с кошелька → код 200
+    Успешное списание с кошелька → код 200 [успешно]
+    Проверка, что транзакция создана [успешно]
     """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
@@ -268,7 +272,7 @@ def test_payment_success(client: TestClient, wallet: Wallet | None, db_session: 
 
 def test_payment_insufficient_funds(client: TestClient, wallet: Wallet | None) -> None:
     """
-    Недостаточно средств для списания → код 400
+    Попытка списания с превышением баланса кошелька → код 400 [ошибка]
     """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
@@ -284,7 +288,7 @@ def test_payment_insufficient_funds(client: TestClient, wallet: Wallet | None) -
 
 def test_payment_invalid_sign(client: TestClient, wallet: Wallet | None) -> None:
     """
-    Неправильный знак amount > 0 → код 400.
+    Попытка списания с неправильным знаком amount > 0 → код 400 [ошибка].
     """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
@@ -300,7 +304,7 @@ def test_payment_invalid_sign(client: TestClient, wallet: Wallet | None) -> None
 
 def test_payment_exact_balance(client: TestClient, wallet: Wallet | None) -> None:
     """
-    Списание ровно в ноль → код 200.
+    Создание списания ровно в ноль → код 200 [успешно].
     """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
@@ -323,7 +327,7 @@ def test_payment_exact_balance(client: TestClient, wallet: Wallet | None) -> Non
 
 def test_payment_missing_amount(client: TestClient, wallet: Wallet | None) -> None:
     """
-    Отсутствие amount в теле → 422 (валидация Pydantic).
+    Попытка списания с отсутствием amount в теле → 422 [ошибка] (валидация Pydantic).
     """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
@@ -337,7 +341,7 @@ def test_payment_missing_amount(client: TestClient, wallet: Wallet | None) -> No
 
 def test_payment_invalid_uuid(client: TestClient) -> None:
     """
-    Неправильный формат UUID в пути → код 422 (валидация FastAPI).
+    Попытка списания с неправильным форматом UUID в пути → код 422 [ошибка] (валидация FastAPI).
     """
     response = client.post(
         url = f'/api/v1/wallets/not-a-uuid/payment',
@@ -349,7 +353,7 @@ def test_payment_invalid_uuid(client: TestClient) -> None:
 
 def test_payment_wallet_not_found(client: TestClient) -> None:
     """
-    Правильный формат UUID, но кошелька нет в БД → код 404.
+    Попытка списания с правильным форматом UUID, но отсутствием кошелька в БД → код 404 [ошибка].
     """
     fake_uuid = uuid4()
     response = client.post(
@@ -362,7 +366,7 @@ def test_payment_wallet_not_found(client: TestClient) -> None:
 
 def test_payment_exceeds_max(client: TestClient, wallet: Wallet | None) -> None:
     """
-    Модуль суммы больше 1 000 000 → код 400.
+    Попытка списания на сумму больше 1 000 000 → код 400 [ошибка].
     """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
@@ -377,7 +381,7 @@ def test_payment_exceeds_max(client: TestClient, wallet: Wallet | None) -> None:
 
 def test_payment_boundary_max(client: TestClient) -> None:
     """
-    Списание ровно 1 000 000 при достаточном балансе → код 200.
+    Списание ровно на 1 000 000 при достаточном балансе → код 200 [успешно].
     """
 
     # Создаём кошелёк с балансом 1 000 000.
@@ -405,7 +409,8 @@ def test_payment_boundary_max(client: TestClient) -> None:
 
 def test_cancel_transaction(client: TestClient, wallet: Wallet | None) -> None:
     """
-    Успешная отмена зачисления на кошелек → код 200
+    Успешная отмена зачисления на кошелек → код 200 [успешно]
+    Повторная отмена для этого кошелька → код 404 [ошибка]
     """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
@@ -442,7 +447,8 @@ def test_cancel_transaction(client: TestClient, wallet: Wallet | None) -> None:
 
 def test_cancel_payment_restores_balance(client: TestClient, wallet: Wallet | None) -> None:
     """
-    Успешная отмена списания с кошелька → код 200.
+    Успешная отмена списания с кошелька → код 200 [успешно]
+    Повторная проверка баланса [успешно]
     """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
@@ -473,7 +479,7 @@ def test_cancel_payment_restores_balance(client: TestClient, wallet: Wallet | No
 
 def test_cancel_without_transactions(client: TestClient, wallet: Wallet | None) -> None:
     """
-    Отмена при отсутствии транзакций → код 404.
+    Попытка отмены при отсутствии транзакций → код 404 [ошибка].
     """
     assert wallet is not None, 'Wallet fixture did not create a wallet'
     uuid = wallet.uuid
@@ -486,7 +492,7 @@ def test_cancel_without_transactions(client: TestClient, wallet: Wallet | None) 
 
 def test_cancel_invalid_uuid(client: TestClient) -> None:
     """
-    Неправильный формат UUID → код 422 (валидация FastAPI).
+    Попытка отмены с неправильным форматом UUID → код 422 [ошибка] (валидация FastAPI).
     """
     response = client.post(
         url = f'/api/v1/wallets/not-a-uuid/cancel'
@@ -496,7 +502,7 @@ def test_cancel_invalid_uuid(client: TestClient) -> None:
 
 def test_cancel_wallet_not_found(client: TestClient) -> None:
     """
-    Правильный формат UUID, но кошелька нет в БД → код 404.
+    Попытка отмены с правильным форматом UUID, но отсутствием кошелька в БД → код 404 [ошибка].
     """
     fake_uuid = uuid4()
 
@@ -534,8 +540,8 @@ def make_deposit(client: TestClient, wallet_uuid: UUID, amount):
 def test_concurrent_withdraws(con_client: TestClient) -> None:
     """
     Конкурентный тест на списание:
-    4 параллельные операции: два списания -60 и два списания -15 при балансе кошелька 100.
-    Во всех случаях: 3 списания → код 200, 1 списание → код 400. Итоговый баланс 10,00.
+    Четыре параллельных операции: два списания -60 и два списания -15 при балансе кошелька 100.
+    Во всех случаях: 3 списания → код 200 [успешно], 1 списание → код 400 [ошибка]. Итоговый баланс 10,00.
     """
     new_wallet = concurrent_wallet(con_client)
     assert new_wallet is not None, 'We could not create a wallet via post request'
@@ -571,8 +577,9 @@ def test_concurrent_withdraws(con_client: TestClient) -> None:
 def test_concurrent_deposit_and_withdraw(con_client: TestClient) -> None:
     """
     Конкурентный тест на списание и зачисление:
-    4 параллельные операции: два пополнения +30 и два списания -60 при балансе 100.
-    Во всех случаях: минимум 3 → код 200, не более 1 → код 400, итоговый баланс 40,00 или 100,00.
+    Четыре параллельных операции: два пополнения +30 и два списания -60 при балансе 100.
+    Во всех случаях: минимум 3 → код 200 [успешно], но не более 1 → код 400 [ошибка].
+    Итоговый баланс 40,00 или 100,00 в зависимости от порядка выполнения транзакций.
     """
     new_wallet = concurrent_wallet(con_client)
     assert new_wallet is not None, 'We could not create a wallet via post request'
@@ -614,9 +621,10 @@ def test_concurrent_deposit_and_withdraw(con_client: TestClient) -> None:
 
 def test_concurrent_different_wallets(con_client: TestClient) -> None:
     """
-    Конкурентный тест на двух разных кошельках: первый кошелек списание -40, второй — зачисление + 50, при балансе каждого из кошельков 100.
-    Проверяет, что блокировка кошелька — построчная, а не глобальная. Операции по разным кошелькам не мешают друг другу.
-    Обе должны завершиться → кодом 200, итоговый баланс первый кошелек 60, второй — 150.
+    Конкурентный тест на двух разных кошельках:
+    Первый кошелек списание -40, второй — зачисление + 50, при балансе каждого из кошельков 100.
+    Проверяет, что блокировка кошелька — построчная, а не глобальная и операции по разным кошелькам не мешают друг другу.
+    Обе операции завершаются → кодом 200 [успешно]. Итоговый баланс первый кошелек 60, второй — 150.
     """
 
     # Создаём два кошелька с балансом 100 каждый

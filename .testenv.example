@@ -1,0 +1,19 @@
+# ------------------------------------------------------------
+# Шаблон конфигурации для тестов.
+# Скопируйте в .testenv: cp .testenv.example .testenv
+# ------------------------------------------------------------
+
+# --- Тестовая PostgreSQL ---
+POSTGRES_USER=test_user
+POSTGRES_PASSWORD=test_pass
+POSTGRES_DB=test_wallets
+
+# --- URL подключения к тестовой БД ---
+# Хост зависит от того, где запускаются тесты:
+#   - внутри docker-сети:  db_test
+#   - на хосте:            localhost
+# См. README, раздел "Запуск тестов".
+DATABASE_URL=postgresql+psycopg://test_user:test_pass@db_test/test_wallets
+
+# --- Логирование ---
+LOG_LEVEL=DEBUG

@@ -27,19 +27,20 @@ def pytest_runtest_setup(item):
     """
     Печатает docstring теста перед запуском.
     """
+    green = '\033[32m'
+    reset = '\033[0m'
+
     doc_str = item.function.__doc__
     if doc_str:
-        print(doc_str)
+        print(f'{green}{doc_str}{reset}')
 
 # ---------- Вспомогательные функции (уровень модуля) ----------
 def override_get_db(session: Session) -> Generator[Session, Any, None]:
     """
     Генератор-зависимость для подмены get_db.
     """
-    try:
-        yield session
-    finally:
-        session.close()
+    yield session
+
 
 def override_get_db_factory() -> Generator[Any, None, None]:
     """
