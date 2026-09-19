@@ -1,7 +1,7 @@
 from uuid import uuid4, UUID
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import delete,select
 from sqlalchemy.orm import Session
 from app.models import Wallet, Transaction, TransactionStatus
 
@@ -30,6 +30,23 @@ def create_wallet(db: Session, initial_balance: Decimal = Decimal('0')) -> Walle
     return new_wallet
 
 
+def delete_wallet(db: Session, wallet_uuid: UUID) -> None:
+    """
+    Удаляет кошелек по UUID.
+    Удаляет все транзакции по этому кошельку
+    """
+    wallet = wallet_and_lock(db, wallet_uuid)
+
+    if wallet is None:
+        raise ServiceError(err_message=f'Кошелёк с uuid: {wallet_uuid} не найден', err_code=404)
+
+    if wallet.balance > 0:
+        raise ServiceError(err_message='Кошелёк имеет ненулевой баланс')
+
+    db.execute(delete(Transaction).where(Transaction.wallet_uuid == wallet_uuid))
+    db.delete(wallet)
+
+
 def get_balance(db: Session, wallet_uuid: UUID) -> Wallet:
     """
     Возвращает баланс кошелька по UUID.
@@ -38,7 +55,7 @@ def get_balance(db: Session, wallet_uuid: UUID) -> Wallet:
     statement = select(Wallet).where(Wallet.uuid == wallet_uuid)
     wallet = db.execute(statement).scalars().first()
 
-    if not wallet:
+    if wallet is None:
         raise ServiceError(err_message=f'Кошелёк с uuid: {wallet_uuid} не найден', err_code=404)
 
     return wallet
@@ -55,7 +72,7 @@ def change_balance(db: Session, wallet_uuid: UUID, amount: Decimal) -> Transacti
     Здесь только целостность данных и проверка на отрицательный баланс.
     """
     wallet = wallet_and_lock(db, wallet_uuid)
-    if not wallet:
+    if wallet is None:
         raise ServiceError(err_message=f'Кошелёк с uuid: {wallet_uuid} не найден', err_code=404)
 
     # Баланс не должен стать отрицательным
@@ -82,7 +99,7 @@ def cancel_transaction(db: Session, wallet_uuid: UUID) -> Transaction:
     # Блокируем кошелёк для безопасного изменения баланса
     wallet = wallet_and_lock(db, wallet_uuid)
 
-    if not wallet:
+    if wallet is None:
         raise ServiceError(err_message=f'Кошелёк с uuid: {wallet_uuid} не найден', err_code=404)
 
     # Находим последнюю транзакцию для кошелька
@@ -95,7 +112,7 @@ def cancel_transaction(db: Session, wallet_uuid: UUID) -> Transaction:
     transact = db.execute(statement).scalars().first()
 
     if not transact:
-        raise ServiceError(err_message=f'Нет транзакций для кошелька с uuid: {wallet_uuid}', err_code=404)
+        raise ServiceError(err_message=f'У кошелька с uuid: {wallet_uuid} нет транзакций', err_code=404)
 
     if transact.status == TransactionStatus.CANCELLED:
         raise ServiceError(err_message=f'Последняя транзакция для кошелька с uuid: {wallet_uuid} уже была отменена', err_code=404)

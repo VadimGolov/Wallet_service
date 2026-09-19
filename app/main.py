@@ -1,14 +1,15 @@
 from uuid import UUID
 from decimal import Decimal
 from datetime import datetime
+from venv import logger
 
 from fastapi import APIRouter, FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.exceptions import ServiceError
-from app.schemas import CreateRequest, CreateResponse, BalanceResponse, TransactionRequest, TransactionResponse, CancelResponse
-from app.services import execute_wallet, execute_balance, execute_deposit, execute_payment, execute_cancel
+from app.schemas import CreateRequest, CreateResponse, DeleteResponse, BalanceResponse, TransactionRequest, TransactionResponse, CancelResponse
+from app.services import execute_wallet, execute_delete, execute_balance, execute_deposit, execute_payment, execute_cancel
 
 app = FastAPI(title='Wallet Service')
 api_v1 = APIRouter(prefix='/api/v1')
@@ -28,6 +29,28 @@ def create_wallet(wallet_data: CreateRequest, db: Session = Depends(get_db)) -> 
         )
     except Exception:
         # Другие ошибки
+        logger.exception('Ошибка при создании кошелька')
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Внутренняя ошибка сервиса",
+        )
+
+
+@api_v1.post('/wallets/{wallet_uuid}/delete', response_model=DeleteResponse)
+def delete_wallet(wallet_uuid: UUID, db: Session = Depends(get_db))-> dict[str, str |UUID]:
+    """
+    Удаление кошелька.
+    """
+    try:
+        return execute_delete(db, wallet_uuid)
+    except ServiceError as fault:
+        raise HTTPException(
+            status_code=fault.status_code,
+            detail=str(fault)
+        )
+    except Exception:
+        # Другие ошибки
+        logger.exception('Ошибка при удалении кошелька')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Внутренняя ошибка сервиса",
@@ -48,6 +71,7 @@ def get_balance(wallet_uuid: UUID, db: Session = Depends(get_db)) -> dict[str, s
         )
     except Exception:
         # Другие ошибки
+        logger.exception('Ошибка при получении баланса')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Внутренняя ошибка сервиса",
@@ -69,6 +93,7 @@ def create_deposit(wallet_uuid: UUID, transaction: TransactionRequest, db: Sessi
         )
     except Exception:
         # Другие ошибки
+        logger.exception('Ошибка при пополнении кошелька')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Внутренняя ошибка сервиса",
@@ -90,6 +115,7 @@ def create_payment(wallet_uuid: UUID, transaction: TransactionRequest, db: Sessi
         )
     except Exception:
         # Другие ошибки
+        logger.exception('Ошибка при списании с кошелька')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Внутренняя ошибка сервиса",
@@ -110,6 +136,7 @@ def cancel_transaction(wallet_uuid: UUID, db: Session = Depends(get_db)) -> dict
         )
     except Exception:
         # Другие ошибки
+        logger.exception('Ошибка при отмене транзакции')
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Внутренняя ошибка сервиса",

@@ -27,12 +27,16 @@ def pytest_runtest_setup(item):
     """
     Печатает docstring теста перед запуском.
     """
+    cyan = '\033[36m'
     green = '\033[32m'
     reset = '\033[0m'
 
     doc_str = item.function.__doc__
     if doc_str:
-        print(f'{green}{doc_str}{reset}')
+        if '200' in doc_str:
+            print(f'{green}{doc_str}{reset}')
+        else:
+            print(f'{cyan}{doc_str}{reset}')
 
 # ---------- Вспомогательные функции (уровень модуля) ----------
 def override_get_db(session: Session) -> Generator[Session, Any, None]:

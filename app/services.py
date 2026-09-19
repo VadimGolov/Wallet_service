@@ -4,7 +4,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 from app.models import Wallet, Transaction
-from app.repository import create_wallet, get_balance, change_balance, cancel_transaction
+from app.repository import create_wallet, delete_wallet, get_balance, change_balance, cancel_transaction
 
 from app.exceptions import ServiceError
 
@@ -33,6 +33,17 @@ def execute_wallet(db: Session, initial_balance: Decimal=Decimal('0')) -> dict[s
         'wallet_uuid': wallet.uuid,
         'balance': wallet.balance,
         'created_at': wallet.created_at
+    }
+
+
+def execute_delete(db: Session, wallet_uuid: UUID) -> dict[str, str | UUID]:
+
+    delete_wallet(db, wallet_uuid)
+    db.commit()
+
+    return {
+        'status': 'Deletion completed',
+        'deleted_wallet_uuid': wallet_uuid,
     }
 
 

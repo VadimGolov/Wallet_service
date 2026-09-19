@@ -47,12 +47,6 @@ class TransactionResponse(BaseModel):
     amount: Decimal
     balance_after: Decimal
 
-class CancelRequest(BaseModel):
-    """
-    Данные от клиента для отмены операции
-    """
-    wallet_uuid: UUID
-
 class CancelResponse(BaseModel):
     """
     Данные для клиента после отмены операции
@@ -62,3 +56,10 @@ class CancelResponse(BaseModel):
     wallet_uuid: UUID
     reversed_amount: Decimal
     balance_after: Decimal
+
+class DeleteResponse(BaseModel):
+    """
+    Данные для клиента после удаления кошелька
+    """
+    status: str
+    deleted_wallet_uuid: UUID
