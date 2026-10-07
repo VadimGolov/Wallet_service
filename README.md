@@ -12,45 +12,38 @@
 
 До описания подсистем я бы хотел ознакомить Вас со структурой моего проекта.
 В структуре отражены только важные файлы, которые обеспечивают работоспособность моего проекта. 
-В корневой папке проекта (у меня `DiplomaProject`) содержатся:
-- **posymess/**
-- `.env`
-- `db.sqlite3`
-  - **posymess/**
-    - `settings.py` 
-  - **main/** 
-    - **management/**
-      - **commands/**
-        - `bot.py`
-        - `keyboards.py`
-        - `support.py`
-    - **migrations/**
-      - `0001_initial.py`
-    - **static/**
-      - **main/**
-        - **css/**
-          - `posy_style.css` 
-        - **img/**
-          - **posies/**
-            - `small_01.png ... small_08.png`
-          - `location.png ...`
-      - **templates/**
-        - **main/**
-          - `bond.html`
-          - `flowers.html`
-          - `header.html`
-          - `layout.html`
-          - `login.html`
-          - `navbar.html`
-          - `orders.html`
-          - `register.html`
-      - `__ init __.py`
-      - `admin.py`
-      - `forms.py`
-      - `models.py`
-      - `tests.py`
-      - `urls.py`
-      - `views.py`
+В корневой папке проекта (у меня `wallet_service`) содержатся:
+
+wallet_service/
+├── alembic/
+│   ├── versions/
+│   │   └── 6f2570da6e36_initial.py
+│   ├── README
+│   ├── env.py
+│   └── script.py.mako
+├── app/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── database.py
+│   ├── exceptions.py
+│   ├── main.py
+│   ├── models.py
+│   ├── repository.py
+│   ├── schemas.py
+│   └── services.py
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py
+│   └── test_wallets.py
+├── Dockerfile
+├── LICENSE
+├── README.md
+├── alembic.ini
+├── docker-compose.test.yml
+├── docker-compose.yml
+├── requirements.txt
+├── run_prod.ps1
+└── run_test.ps1
 
 ---
 ### Подсистемы и модули:
@@ -58,21 +51,10 @@
 Поскольку предполагался простой проект, я реализовал весь функционал в приложении main, —
 это видно по структуре проекта. В проекте можно выделить несколько подсистем:
 
-**1. Telegram-бот**
-
-**2. Обеспечение работы сайта**
-
-**3. Работа с базой данных**
-
-**4. Маленкая подсистемка Unit-тестов**
+**1. Описание эндпоинтов**
+**4. Система Pytest-тестов**
 
 ### Модули проекта:
-
-**1. Telegram-бот**
-   
-   Представлен основным файлом `bot.py` и двумя вспомогательными файлами `keyboards.py` и `support.py`
-   - Файл `keyboards.py` содержит модели reply-клавиатур.
-   - Файл `support.py` содержит несколько вспомогательных функций.
 
 **2. Работа сайта**
 

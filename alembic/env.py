@@ -4,8 +4,8 @@ from alembic import context
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
-from app.models import Base
-from app.config import settings
+from app.db.models import Base
+from app.configs.config import settings
 
 # Добавляем корень проекта, чтобы Alembic видел app
 # project_root = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))

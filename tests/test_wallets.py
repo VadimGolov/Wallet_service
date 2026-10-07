@@ -4,11 +4,11 @@ from decimal import Decimal
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor
 
-from sqlalchemy.orm import Session
 from httpx import Response
+from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
 
-from app.models import Wallet, Transaction
+from app.db.models import Wallet, Transaction
 
 
 # ---------- Секция: Создание кошелька ----------
@@ -60,7 +60,7 @@ def test_create_wallet_negative_balance(client: TestClient) -> None:
         json={"balance": "-50.00"}
     )
     assert response.status_code == 400
-    assert 'не может быть отрицательным' in response.text
+    assert 'не может быть отрицательным' in response.text.lower()
 
 
 def test_create_wallet_exceeds_max(client: TestClient) -> None:
@@ -228,7 +228,7 @@ def test_deposit_invalid_sign(client: TestClient, wallet: Wallet | None) -> None
     )
 
     assert response.status_code == 400
-    assert 'должен быть строго положительным' in response.text
+    assert 'сумма должна быть строго положительной' in response.text.lower()
 
 
 def test_deposit_missing_amount(client: TestClient, wallet: Wallet | None) -> None:
@@ -345,7 +345,7 @@ def test_payment_insufficient_funds(client: TestClient, wallet: Wallet | None) -
     )
 
     assert response.status_code == 400
-    assert 'Недостаточно средств' in response.text
+    assert 'недостаточно средств' in response.text.lower()
 
 
 def test_payment_invalid_sign(client: TestClient, wallet: Wallet | None) -> None:
@@ -361,7 +361,7 @@ def test_payment_invalid_sign(client: TestClient, wallet: Wallet | None) -> None
     )
 
     assert response.status_code == 400
-    assert 'должен быть строго отрицательным' in response.text
+    assert 'сумма должна быть строго отрицательной' in response.text.lower()
 
 
 def test_payment_exact_balance(client: TestClient, wallet: Wallet | None) -> None:
@@ -670,14 +670,12 @@ def test_concurrent_deposit_and_withdraw(con_client: TestClient) -> None:
         deposit_2 = executor.submit(deposit)
         withdraw_2 = executor.submit(withdraw)
 
-        results = (
-            deposit_1.result(),
-            deposit_2.result(),
-            withdraw_1.result(),
-            withdraw_2.result(),
+        statuses = (
+            deposit_1.result().status_code,
+            deposit_2.result().status_code,
+            withdraw_1.result().status_code,
+            withdraw_2.result().status_code,
         )
-
-    statuses = [item.status_code for item in results]
 
     success_count = statuses.count(200)
     fail_count = statuses.count(400)
@@ -737,7 +735,7 @@ def test_concurrent_delete_and_deposit(con_client: TestClient) -> None:
     """
     Конкурентный тест на удаление и зачисление:
     Две параллельных операции: удаление и зачисление +30 при балансе кошелька 0.
-    Cлучаи: При успешном удалении → код 200 [успешно], попытка пополнения вызовет провал → код 404 [ошибка].
+    Случаи: При успешном удалении → код 200 [успешно], попытка пополнения вызовет провал → код 404 [ошибка].
             При успешном пополнении → код 200 [успешно], попытка удаления вызовет провал → код 400 [ошибка].
     Итоговый баланс; отсутствие кошелька → код 404 [ошибка], или +30.
     """

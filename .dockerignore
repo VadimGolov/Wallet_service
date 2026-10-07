@@ -11,3 +11,4 @@ docker-compose.yml
 .env.local
 tests/
 .pytest_cache/
+app/logs/.gitkeep

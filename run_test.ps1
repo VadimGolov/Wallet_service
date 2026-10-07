@@ -39,7 +39,7 @@ if (-not $containers) {
 if ($rebuild -eq 'Y') {
     if ($containers) {
         Write-Host "`n[2] ”дал€ю старые контейнеры и volume..." -ForegroundColor Green
-        Inspect -Command { docker compose -f $composeFile down -v --remove-orphans --rmi local } `
+        Inspect -Command { docker compose -f $composeFile down -v --remove-orphans } `
                 -Message "ќшибка при docker compose down"
     }
     Write-Host "`n[3] —обираю новые контейнеры..." -ForegroundColor Green

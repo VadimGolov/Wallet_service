@@ -28,6 +28,7 @@ services:
     volumes:
       - ./alembic:/app/alembic
       - ./tests:/app/tests
+      - ./app/logs:/app/app/logs
     command: pytest -v -s --tb=short --color=yes tests/
     depends_on:
       db_test:

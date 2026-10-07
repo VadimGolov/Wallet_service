@@ -1,16 +1,17 @@
 import pytest
+from decimal import Decimal
 from typing import Any, Generator
 from fastapi.testclient import TestClient
+
 from sqlalchemy import create_engine, delete
 from sqlalchemy.orm import sessionmaker, Session
-from decimal import Decimal
 from functools import partial
 
 from app.main import app
-from app.database import get_db
-from app.models import Wallet, Transaction
-from app.config import test_settings
-from app.services import execute_wallet
+from app.api.session import get_db
+from app.db.models import Wallet, Transaction
+from app.configs.config import test_settings
+from app.services.actions import execute_wallet
 
 # ---------- Настройка тестовой БД ----------
 engine = create_engine(
@@ -37,6 +38,7 @@ def pytest_runtest_setup(item):
             print(f'{green}{doc_str}{reset}')
         else:
             print(f'{cyan}{doc_str}{reset}')
+
 
 # ---------- Вспомогательные функции (уровень модуля) ----------
 def override_get_db(session: Session) -> Generator[Session, Any, None]:
