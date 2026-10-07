@@ -13,3 +13,12 @@ docker compose -f docker-compose.yml up -d --build
 # Проверка статуса
 Write-Host "`n[3] Проверка статуса" -ForegroundColor Cyan
 docker compose ps
+
+# --- Финал ---
+$compose = "docker compose -f docker-compose.yml "
+
+Write-Host "`n--------------------------------------------------" -ForegroundColor Cyan
+Write-Host "Swagger: http://localhost:8000/docs" -ForegroundColor Cyan
+Write-Host "Логи:    $compose logs -f" -ForegroundColor Cyan
+Write-Host "Стоп:    $compose down" -ForegroundColor Cyan
+Write-Host "--------------------------------------------------" -ForegroundColor Cyan
