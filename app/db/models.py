@@ -1,3 +1,4 @@
+from typing import Final
 from uuid import UUID as Py_UUID
 from datetime import datetime
 from decimal import Decimal
@@ -7,8 +8,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class TransactionStatus:
-    CONFIRMED: str = 'CONFIRMED'
-    CANCELLED: str = 'CANCELLED'
+    CONFIRMED: Final[str] = 'CONFIRMED'
+    CANCELLED: Final[str] = 'CANCELLED'
 
 
 class Base(DeclarativeBase):
@@ -37,7 +38,7 @@ class Transaction(Base):
         Uuid,
         ForeignKey('wallets.uuid'),
         nullable=False,
-        index=True,
+        index=True
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(precision=10, scale=2), nullable=False)
     status: Mapped[str] = mapped_column(String(10), default=TransactionStatus.CONFIRMED)

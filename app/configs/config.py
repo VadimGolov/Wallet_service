@@ -1,13 +1,15 @@
 import os
+from typing import Literal
 from pathlib import Path
 from dotenv import find_dotenv, load_dotenv
 
+ModeType = Literal['prod', 'test']
 
 class Settings:
     """
     Класс для загрузки настроек из файлов .env и .testenv
     """
-    def __init__(self, mode: str, base_path: Path | None = None) -> None:
+    def __init__(self, mode: ModeType, base_path: Path | None = None) -> None:
         self.mode = mode
         self.base_path = (base_path or Path()).resolve()
 
