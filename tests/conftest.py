@@ -12,9 +12,6 @@ from app.api.session import get_db
 from app.db.models import Wallet, Transaction
 from app.configs.config import test_settings
 from app.services.actions import execute_wallet
-from app.configs.logger import run_logger
-
-run_logger('test')
 
 # ---------- Настройка тестовой БД ----------
 engine = create_engine(

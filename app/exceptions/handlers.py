@@ -31,6 +31,7 @@ def validation_error_handler(_request: Request, exclusion: RequestValidationErro
         first_err = err_list[0]
         location = '.'.join(str(field) for field in first_err['loc'] if field != 'body')
         message = f'Ошибочные данные в поле "{location}": {first_err["msg"]}'
+
         logger.warning(' '.join([log_message, first_err['msg']]))
 
     return JSONResponse(
@@ -44,7 +45,8 @@ def unhandled_exception_handler(_request: Request, exclusion: Exception) -> JSON
     Всё, что не поймали раньше.
     """
     logger.exception(
-        'Необработанная ошибка на {method} {path}',
+        'Необработанная ошибка [{err_code}]: {method} {path}',
+        err_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         method=_request.method,
         path=_request.url.path,
         exc_info=exclusion

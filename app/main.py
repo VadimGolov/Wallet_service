@@ -7,6 +7,8 @@ from app.exceptions.handlers import register_handlers
 
 if 'pytest' not in sys.modules:
     run_logger('prod')
+else:
+    run_logger('test')
 
 app = FastAPI(title='Wallet Service')
 register_handlers(app)

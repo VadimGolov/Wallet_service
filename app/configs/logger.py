@@ -15,7 +15,7 @@ FULL_FORMAT: Final[str] = (
     '{name}:{function: <24}:{line} | '
     '{message}\n'
 )
-SESSION_FORMAT: Final[str] = (
+SERVICE_FORMAT: Final[str] = (
     '{time:YYYY-MM-DD HH:mm:ss    } | '
     '{level: <8} | '
     '{message}\n'
@@ -27,7 +27,7 @@ def _formatter(record: Any) -> str:
     Выбирает формат в зависимости от того, помечена ли запись как сессионная.
     """
     if record['extra'].get('session'):
-        return SESSION_FORMAT
+        return SERVICE_FORMAT
     return FULL_FORMAT
 
 class Logging:
@@ -73,9 +73,7 @@ class Logging:
         )
 
         logger.bind(session=True).info('--- Запуск сервиса ---')
-        atexit.register(
-            lambda: logger.bind(session=True).info('--- Остановка сервиса ---')
-        )
+        atexit.register(lambda: logger.bind(session=True).info('--- Остановка сервиса ---'))
 
 
 def run_logger(mode: ModeType = 'prod') -> None:

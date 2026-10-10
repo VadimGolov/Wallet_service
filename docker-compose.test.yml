@@ -6,20 +6,10 @@ services:
     tmpfs:
       - /var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test_user -d test_wallets"]
+      test: ['CMD-SHELL', 'pg_isready -U test_user -d test_wallets']
       interval: 5s
       timeout: 5s
       retries: 5
-
-  migrate:
-    build: .
-    env_file:
-      - .testenv
-    command: alembic upgrade head
-    depends_on:
-      db_test:
-        condition: service_healthy
-    restart: 'no'
 
   test:
     build: .
@@ -29,7 +19,10 @@ services:
       - ./alembic:/app/alembic
       - ./tests:/app/tests
       - ./app/logs:/app/app/logs
-    command: pytest -v -s --tb=short --color=yes tests/
+    command: > 
+      sh -c '
+        alembic upgrade head &&
+        pytest -v -s --tb=short --color=yes tests/'
     depends_on:
       db_test:
         condition: service_healthy
