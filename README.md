@@ -157,11 +157,11 @@ docker compose -f docker-compose.test.yml down
 | Метод  | Путь                             | Назначение                  |
 |---     |---                               |---                          |
 | `POST` | `/wallet`                        | Создание нового кошелька    |
-| `POST` | `/wallets/{wallet_uuid}/delete`  | Удаление кошелька           |
-| `GET`  | `/wallets/{wallet_uuid}/balance` | Получение баланса           |
-| `POST` | `/wallets/{wallet_uuid}/deposit` | Зачисление средств          |
-| `POST` | `/wallets/{wallet_uuid}/payment` | Списание средств            |
-| `POST` | `/wallets/{wallet_uuid}/cancel`  | Отмена последней транзакции |
+| `POST` | `/wallets/<wallet_uuid>/delete`  | Удаление кошелька           |
+| `GET`  | `/wallets/<wallet_uuid>/balance` | Получение баланса           |
+| `POST` | `/wallets/<wallet_uuid}>deposit` | Зачисление средств          |
+| `POST` | `/wallets/<wallet_uuid>/payment` | Списание средств            |
+| `POST` | `/wallets/<wallet_uuid>/cancel`  | Отмена последней транзакции |
 
 ### Примеры запросов
 
