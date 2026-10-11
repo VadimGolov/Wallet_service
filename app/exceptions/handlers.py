@@ -21,18 +21,22 @@ def validation_error_handler(_request: Request, exclusion: RequestValidationErro
     """
     Ошибки валидации FastAPI приводим к единому формату {'detail': '<строка>'}.
     """
+    route = _request.scope.get('route')
+    function_name: str = getattr(route, 'name', 'unknown')
+
+    log_message = f'Ошибочные данные [{status.HTTP_422_UNPROCESSABLE_CONTENT}]: {function_name}'
+
     err_list = exclusion.errors()
-    log_message = f'Ошибочные данные [{status.HTTP_422_UNPROCESSABLE_CONTENT}]:'
 
     if not err_list:
         message = 'Отправленные данные не прошли проверку'
-        logger.warning(' '.join([log_message, message]))
+        logger.warning(f'{log_message}: {message}')
     else:
         first_err = err_list[0]
         location = '.'.join(str(field) for field in first_err['loc'] if field != 'body')
         message = f'Ошибочные данные в поле "{location}": {first_err["msg"]}'
 
-        logger.warning(' '.join([log_message, first_err['msg']]))
+        logger.warning(f'{log_message}, {first_err["loc"]}: {first_err["msg"]}')
 
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

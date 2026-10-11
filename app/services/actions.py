@@ -4,13 +4,19 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from app.configs.logger import logger
 from app.configs.limits import ActionLimits
 from app.db.models import Transaction, Wallet
 from app.exceptions.catalog import ServiceError, WalletError
 from app.services.repository import create_wallet, delete_wallet, get_balance, change_balance, cancel_transaction
 
 
-def execute_wallet(db: Session, initial_balance: Decimal = Decimal('0')) -> dict[str, str | UUID | Decimal | datetime]:
+def execute_wallet(
+    db: Session,
+    initial_balance: Decimal = Decimal('0'),
+) -> dict[str, str | UUID | Decimal | datetime]:
+
+    logger.debug(f'execute_wallet: Создание кошелька, initial_balance = {initial_balance}')
 
     if initial_balance < 0:
         raise ServiceError(WalletError.NEGATIVE_BALANCE)
@@ -21,6 +27,8 @@ def execute_wallet(db: Session, initial_balance: Decimal = Decimal('0')) -> dict
     db.commit()
     db.refresh(wallet)
 
+    logger.debug(f'execute_wallet: Успешно, wallet_uuid: {wallet.uuid}, balance = {wallet.balance}')
+
     return {
         'status': 'New wallet created',
         'wallet_uuid': wallet.uuid,
@@ -30,8 +38,13 @@ def execute_wallet(db: Session, initial_balance: Decimal = Decimal('0')) -> dict
 
 
 def execute_delete(db: Session, wallet_uuid: UUID) -> dict[str, str | UUID]:
+
+    logger.debug(f'execute_delete: Удаление кошелька, wallet_uuid: {wallet_uuid}')
+
     delete_wallet(db, wallet_uuid)
     db.commit()
+
+    logger.debug(f'execute_delete: Успешно, deleted_wallet_uuid: {wallet_uuid}')
 
     return {
         'status': 'Deletion completed',
@@ -40,7 +53,12 @@ def execute_delete(db: Session, wallet_uuid: UUID) -> dict[str, str | UUID]:
 
 
 def execute_balance(db: Session, wallet_uuid: UUID) -> dict[str, str | UUID | Decimal]:
+
+    logger.debug(f'execute_balance: Запрос баланса, wallet_uuid: {wallet_uuid}')
+
     wallet: Wallet = get_balance(db, wallet_uuid)
+
+    logger.debug(f'execute_balance: Успешно, wallet_uuid: {wallet.uuid}, balance = {wallet.balance}')
 
     return {
         'status': 'Wallet balance',
@@ -49,10 +67,17 @@ def execute_balance(db: Session, wallet_uuid: UUID) -> dict[str, str | UUID | De
     }
 
 
-def execute_deposit(db: Session, wallet_uuid: UUID, amount: Decimal) -> dict[str, int | str | UUID | Decimal]:
+def execute_deposit(
+    db: Session,
+    wallet_uuid: UUID,
+    amount: Decimal,
+) -> dict[str, int | str | UUID | Decimal]:
     """
     Зачисление средств — amount должен быть строго положительным.
     """
+
+    logger.debug(f'execute_deposit: Зачисление средств, wallet_uuid: {wallet_uuid}, amount = {amount}')
+
     if amount <= 0:
         raise ServiceError(WalletError.AMOUNT_MUST_BE_POSITIVE)
     if amount > ActionLimits.DEPOSIT:
@@ -61,6 +86,10 @@ def execute_deposit(db: Session, wallet_uuid: UUID, amount: Decimal) -> dict[str
     trans: Transaction = change_balance(db, wallet_uuid, amount)
     db.commit()
     db.refresh(trans)
+
+    logger.debug(
+        f'execute_deposit: Успешно, transaction_id = {trans.id}, balance_after = {trans.wallet.balance}'
+    )
 
     return {
         'status': 'Deposit completed',
@@ -71,10 +100,17 @@ def execute_deposit(db: Session, wallet_uuid: UUID, amount: Decimal) -> dict[str
     }
 
 
-def execute_payment(db: Session, wallet_uuid: UUID, amount: Decimal) -> dict[str, int | str | UUID | Decimal]:
+def execute_payment(
+    db: Session,
+    wallet_uuid: UUID,
+    amount: Decimal,
+) -> dict[str, int | str | UUID | Decimal]:
     """
     Списание средств — amount должен быть строго отрицательным.
     """
+
+    logger.debug(f'execute_payment: Списание средств, wallet_uuid: {wallet_uuid}, amount = {amount}')
+
     if amount >= 0:
         raise ServiceError(WalletError.AMOUNT_MUST_BE_NEGATIVE)
     if abs(amount) > ActionLimits.WITHDRAW:
@@ -83,6 +119,10 @@ def execute_payment(db: Session, wallet_uuid: UUID, amount: Decimal) -> dict[str
     trans: Transaction = change_balance(db, wallet_uuid, amount)
     db.commit()
     db.refresh(trans)
+
+    logger.debug(
+        f'execute_payment: Успешно, transaction_id = {trans.id}, balance_after = {trans.wallet.balance}'
+    )
 
     return {
         'status': 'Withdraw completed',
@@ -97,9 +137,17 @@ def execute_cancel(db: Session, wallet_uuid: UUID) -> dict[str, str | int | UUID
     """
     Отмена последней транзакции для кошелька.
     """
+
+    logger.debug(f'execute_cancel: Отмена транзакции, wallet_uuid: {wallet_uuid}')
+
     trans: Transaction = cancel_transaction(db, wallet_uuid)
     db.commit()
     db.refresh(trans.wallet)
+
+    logger.debug(
+        f'execute_cancel: Успешно, transaction_id = {trans.id}, '
+        f'reversed_amount = {trans.amount}, balance_after = {trans.wallet.balance}'
+    )
 
     return {
         'status': 'Cancel completed',

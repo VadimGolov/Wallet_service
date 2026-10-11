@@ -12,7 +12,7 @@ ModeType = Literal['prod', 'test']
 FULL_FORMAT: Final[str] = (
     '{time:YYYY-MM-DD HH:mm:ss.SSS} | '
     '{level: <8} | '
-    '{name}:{function: <24}:{line} | '
+    '{name: <23}:{function: <24}:{line} | '
     '{message}\n'
 )
 SERVICE_FORMAT: Final[str] = (
@@ -72,8 +72,8 @@ class Logging:
             diagnose=False,
         )
 
-        logger.bind(session=True).info('--- Запуск сервиса ---')
-        atexit.register(lambda: logger.bind(session=True).info('--- Остановка сервиса ---'))
+        logger.bind(session=True).info(f'--- Запуск сервиса ({self.mode}) ---')
+        atexit.register(lambda: logger.bind(session=True).info(f'--- Остановка сервиса ({self.mode}) ---'))
 
 
 def run_logger(mode: ModeType = 'prod') -> None:
